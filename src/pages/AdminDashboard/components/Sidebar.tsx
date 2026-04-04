@@ -53,9 +53,15 @@ export default function Sidebar({ isOpen, onClose }: SidebarProps) {
   return (
     <>
       {/* Desktop Sidebar (Permanent) */}
-      <aside className={`hidden lg:flex w-64 glass-card rounded-none border-y-0 h-screen sticky top-0 p-4 flex-col gap-2 ${rtl ? 'border-l border-r-0' : 'border-r border-l-0'}`}>
-        <div className="mb-8 px-4 py-2 border-b border-white/5">
-           <h2 className="text-xl font-black tracking-tighter text-primary-500 uppercase">Packet <span className="text-[10px] bg-primary-500/10 px-2 rounded-full lowercase">admin</span></h2>
+      <aside className={`hidden lg:flex w-64 glass-card rounded-none border-y-0 h-screen sticky top-0 p-4 flex-col gap-2 ${rtl ? 'border-l border-r-0' : 'border-r border-l-0'} relative overflow-hidden group/sidebar`}>
+        {/* Animated Glow Backdrop */}
+        <div className="absolute top-[-10%] left-[-10%] w-[40%] h-[40%] bg-primary-500/10 blur-[80px] rounded-full pointer-events-none group-hover/sidebar:bg-primary-500/20 transition-all duration-700" />
+        
+        <div className="mb-8 px-4 py-2 border-b border-white/5 relative z-10">
+           <h2 className="text-xl font-black tracking-tighter text-primary-500 uppercase flex items-center gap-2">
+             <div className="w-2 h-2 rounded-full bg-primary-500 animate-pulse shadow-[0_0_10px_#10b981]" />
+             Packet <span className="text-[10px] bg-primary-500/10 px-2 rounded-full lowercase">admin</span>
+           </h2>
         </div>
         
         <div className="flex-grow flex flex-col gap-1 overflow-y-auto pr-2 custom-scrollbar">
@@ -67,12 +73,12 @@ export default function Sidebar({ isOpen, onClose }: SidebarProps) {
         {/* User Info & Logout */}
         <div className="mt-auto pt-4 border-t border-white/5 space-y-2">
           <div className="flex items-center gap-3 px-4 py-3 rounded-2xl bg-white/5">
-            <div className="w-8 h-8 rounded-full bg-primary-500/20 flex items-center justify-center text-primary-500 font-bold text-xs">
+            <div className="w-8 h-8 rounded-full bg-primary-500/20 flex items-center justify-center text-primary-500 font-bold text-xs ring-1 ring-primary-500/30">
               {user?.username.substring(0, 1).toUpperCase()}
             </div>
             <div className="flex-grow min-w-0">
               <p className="text-white text-xs font-bold truncate">{user?.username}</p>
-              <p className="text-slate-500 text-[10px]">{user?.is_super_admin ? 'مدير عام' : 'مدير فرعي'}</p>
+              <p className="text-slate-500 text-[10px]">{user?.is_super_admin ? 'مدير عام' : 'مسؤول'}</p>
             </div>
           </div>
           
@@ -108,6 +114,15 @@ export default function Sidebar({ isOpen, onClose }: SidebarProps) {
             </div>
 
             <div className="mt-auto pt-4 border-t border-white/5 space-y-2">
+              <div className="flex items-center gap-3 px-4 py-3 mb-2 rounded-xl bg-white/5 border border-white/5">
+                <div className="w-8 h-8 rounded-full bg-primary-500/20 flex items-center justify-center text-primary-500 font-bold text-xs ring-1 ring-primary-500/30">
+                    {user?.username.substring(0, 1).toUpperCase()}
+                </div>
+                <div className="flex-grow min-w-0">
+                    <p className="text-white text-xs font-bold truncate">{user?.username}</p>
+                    <p className="text-slate-500 text-[10px]">{user?.is_super_admin ? 'مدير عام' : 'مسؤول'}</p>
+                </div>
+              </div>
               <button 
                 onClick={handleLogout}
                 className="w-full flex items-center gap-3 px-4 py-3 rounded-xl text-red-400 hover:bg-red-500/10 transition-all font-bold"
@@ -130,18 +145,28 @@ function SidebarLink({ tab, currentPath, rtl }: { tab: any, rtl: boolean, curren
   return (
     <Link
       to={tab.path}
-      className={`flex items-center gap-3 px-4 py-3 rounded-xl transition-all ${
+      className={`flex items-center gap-3 px-4 py-3 rounded-xl transition-all relative overflow-hidden group/link ${
         isActive 
-          ? 'bg-primary-500 text-white shadow-md shadow-primary-500/20' 
+          ? 'bg-primary-500 text-white shadow-[0_0_20px_rgba(16,185,129,0.3)]' 
           : 'hover:bg-slate-100 dark:hover:bg-white/5 text-slate-600 dark:text-slate-300 hover:text-primary-500'
       }`}
     >
-      <Icon size={18} className="shrink-0" />
-      <span className="font-bold text-sm tracking-tight">{tab.label}</span>
+      {/* Shiny Light Sweep Effect */}
+      {isActive && (
+        <motion.div
+           initial={{ x: '-100%' }}
+           animate={{ x: '200%' }}
+           transition={{ duration: 2, repeat: Infinity, ease: "linear", repeatDelay: 1 }}
+           className="absolute inset-0 bg-gradient-to-r from-transparent via-white/20 to-transparent skew-x-12 pointer-events-none"
+        />
+      )}
+      
+      <Icon size={18} className={`shrink-0 transition-transform duration-300 ${isActive ? 'scale-110 shadow-[0_0_10px_rgba(255,255,255,0.5)]' : 'group-hover/link:scale-110'}`} />
+      <span className="font-bold text-sm tracking-tight relative z-10">{tab.label}</span>
       {isActive && (
         <motion.div 
           layoutId="activeTab"
-          className={`absolute ${rtl ? 'right-0' : 'left-0'} w-1 h-6 bg-white rounded-full`}
+          className={`absolute ${rtl ? 'right-0' : 'left-0'} w-1 h-6 bg-white rounded-full shadow-[0_0_10px_#fff]`}
         />
       )}
     </Link>

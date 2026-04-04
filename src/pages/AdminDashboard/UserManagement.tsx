@@ -139,7 +139,7 @@ export default function UserManagement() {
                 <div>
                   <h3 className="text-lg font-bold text-white group-hover:text-primary-400 transition-colors">{admin.username}</h3>
                   <span className="text-xs text-slate-500 block mt-0.5">
-                    {admin.is_super_admin ? 'مسؤول رئيسي' : 'مسؤول فرعي'}
+                    {admin.is_super_admin ? 'مسؤول رئيسي' : 'مسؤول'}
                   </span>
                 </div>
               </div>
