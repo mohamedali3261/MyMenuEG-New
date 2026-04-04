@@ -1,13 +1,13 @@
 import { useState, useEffect } from 'react';
 import { Outlet, useLocation } from 'react-router-dom';
 import Sidebar from './components/Sidebar';
-import { Menu, X, Bell, User } from 'lucide-react';
+import { Menu, X } from 'lucide-react';
 import { useStore } from '../../store/store';
 import { motion, AnimatePresence } from 'framer-motion';
 
 export default function AdminLayout() {
   const [isSidebarOpen, setIsSidebarOpen] = useState(false);
-  const { rtl, branding } = useStore();
+  const { branding } = useStore();
   const location = useLocation();
 
   useEffect(() => {
