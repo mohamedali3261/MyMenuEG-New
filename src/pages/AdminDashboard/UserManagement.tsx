@@ -8,7 +8,8 @@ import {
   LucideUserCheck, 
   LucideX,
   LucideCheck,
-  LucideLock
+  LucideLock,
+  LucidePencil
 } from 'lucide-react';
 import { motion, AnimatePresence } from 'framer-motion';
 import toast from 'react-hot-toast';
@@ -24,8 +25,11 @@ const AVAILABLE_PAGES = [
 ];
 
 export default function UserManagement() {
-  const { user, admins, fetchAdmins, addAdmin, deleteAdmin } = useStore();
+  const { user, admins, fetchAdmins, addAdmin, updateAdmin, deleteAdmin } = useStore();
   const [isModalOpen, setIsModalOpen] = useState(false);
+  const [isEditMode, setIsEditMode] = useState(false);
+  const [editingId, setEditingId] = useState<string | null>(null);
+  
   const [username, setUsername] = useState('');
   const [password, setPassword] = useState('');
   const [selectedPermissions, setSelectedPermissions] = useState<string[]>([]);
@@ -45,24 +49,48 @@ export default function UserManagement() {
     );
   }
 
-  const handleAddUser = async (e: React.FormEvent) => {
+  const handleOpenAdd = () => {
+    setIsEditMode(false);
+    setEditingId(null);
+    setUsername('');
+    setPassword('');
+    setSelectedPermissions([]);
+    setIsModalOpen(true);
+  };
+
+  const handleOpenEdit = (admin: any) => {
+    setIsEditMode(true);
+    setEditingId(admin.id);
+    setUsername(admin.username);
+    setPassword(''); // Don't show hashed password
+    setSelectedPermissions(admin.permissions || []);
+    setIsModalOpen(true);
+  };
+
+  const handleSaveUser = async (e: React.FormEvent) => {
     e.preventDefault();
-    if (selectedPermissions.length === 0) {
+    if (selectedPermissions.length === 0 && !isEditMode) {
       toast.error('يرجى تحديد صلاحية واحدة على الأقل');
       return;
     }
     
     setIsLoading(true);
-    const success = await addAdmin({ username, password, permissions: selectedPermissions });
+    let success = false;
+
+    if (isEditMode && editingId) {
+      const data: any = { username, permissions: selectedPermissions };
+      if (password) data.password = password; // Only update if provided
+      success = await updateAdmin(editingId, data);
+    } else {
+      success = await addAdmin({ username, password, permissions: selectedPermissions });
+    }
+
     if (success) {
-      toast.success('تم إضافة المستخدم بنجاح');
+      toast.success(isEditMode ? 'تم تحديث البيانات بنجاح' : 'تم إضافة المستخدم بنجاح');
       setIsModalOpen(false);
-      setUsername('');
-      setPassword('');
-      setSelectedPermissions([]);
       fetchAdmins();
     } else {
-      toast.error('فشل في إضافة المستخدم (ربما الاسم موجود مسبقاً)');
+      toast.error('فشل في حفظ البيانات (ربما الاسم موجود مسبقاً)');
     }
     setIsLoading(false);
   };
@@ -85,7 +113,7 @@ export default function UserManagement() {
         </div>
         
         <button 
-          onClick={() => setIsModalOpen(true)}
+          onClick={handleOpenAdd}
           className="flex items-center justify-center gap-2 bg-primary-500 hover:bg-primary-600 text-white px-6 py-3 rounded-2xl font-bold transition-all shadow-lg shadow-primary-500/20 active:scale-95"
         >
           <LucidePlus size={20} />
@@ -116,18 +144,29 @@ export default function UserManagement() {
                 </div>
               </div>
 
-              {!admin.is_super_admin && (
+              <div className="flex gap-2">
                 <button 
-                  onClick={() => {
-                    if (window.confirm('هل أنت متأكد من حذف هذا المستخدم؟')) {
-                      deleteAdmin(admin.id).then(() => fetchAdmins());
-                    }
-                  }}
-                  className="p-2 text-slate-500 hover:text-red-500 hover:bg-red-500/10 rounded-xl transition-all"
+                  onClick={() => handleOpenEdit(admin)}
+                  className="p-2 text-slate-500 hover:text-primary-500 hover:bg-primary-500/10 rounded-xl transition-all"
+                  title="تعديل"
                 >
-                  <LucideTrash2 size={18} />
+                  <LucidePencil size={18} />
                 </button>
-              )}
+                
+                {!admin.is_super_admin && (
+                  <button 
+                    onClick={() => {
+                      if (window.confirm('هل أنت متأكد من حذف هذا المستخدم؟')) {
+                        deleteAdmin(admin.id).then(() => fetchAdmins());
+                      }
+                    }}
+                    className="p-2 text-slate-500 hover:text-red-500 hover:bg-red-500/10 rounded-xl transition-all"
+                    title="حذف"
+                  >
+                    <LucideTrash2 size={18} />
+                  </button>
+                )}
+              </div>
             </div>
 
             <div className="mt-6 space-y-3 relative z-10">
@@ -136,11 +175,11 @@ export default function UserManagement() {
                 {admin.is_super_admin ? (
                   <span className="px-3 py-1 bg-primary-500/10 text-primary-500 rounded-full text-xs font-bold border border-primary-500/20">كل الصفحات</span>
                 ) : (
-                  admin.permissions.map(p => (
+                  admin.permissions?.map((p: string) => (
                     <span key={p} className="px-3 py-1 bg-white/5 text-slate-300 rounded-full text-xs font-bold border border-white/10 group-hover:border-primary-500/20 transition-all">
                       {AVAILABLE_PAGES.find(ap => ap.id === p)?.name || p}
                     </span>
-                  ))
+                  )) || <span className="text-xs text-slate-600">لا توجد صلاحيات</span>
                 )}
               </div>
             </div>
@@ -148,7 +187,7 @@ export default function UserManagement() {
         ))}
       </div>
 
-      {/* Add User Modal */}
+      {/* Add/Edit User Modal */}
       <AnimatePresence>
         {isModalOpen && (
           <div className="fixed inset-0 z-[100] flex items-center justify-center p-4">
@@ -168,15 +207,15 @@ export default function UserManagement() {
             >
               <div className="flex items-center justify-between mb-8">
                 <h2 className="text-2xl font-black text-white flex items-center gap-3">
-                  <LucideUserCheck className="text-primary-500" size={28} />
-                  <span>إضافة مسؤول جديد</span>
+                  {isEditMode ? <LucidePencil className="text-primary-500" size={28} /> : <LucideUserCheck className="text-primary-500" size={28} />}
+                  <span>{isEditMode ? `تعديل المستخدم: ${username}` : 'إضافة مسؤول جديد'}</span>
                 </h2>
                 <button onClick={() => setIsModalOpen(false)} className="p-2 text-slate-400 hover:text-white hover:bg-white/5 rounded-xl transition-all">
                   <LucideX size={24} />
                 </button>
               </div>
 
-              <form onSubmit={handleAddUser} className="space-y-8">
+              <form onSubmit={handleSaveUser} className="space-y-8">
                 <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
                   <div className="space-y-2">
                     <label className="text-sm font-bold text-slate-400 mr-1 block">اسم المستخدم</label>
@@ -190,14 +229,14 @@ export default function UserManagement() {
                     />
                   </div>
                   <div className="space-y-2">
-                    <label className="text-sm font-bold text-slate-400 mr-1 block">كلمة المرور</label>
+                    <label className="text-sm font-bold text-slate-400 mr-1 block">كلمة المرور {isEditMode && '(اتركها فارغة لعدم التغيير)'}</label>
                     <input 
                       type="password" 
                       value={password}
                       onChange={(e) => setPassword(e.target.value)}
                       className="w-full h-12 bg-white/5 border border-white/10 rounded-xl px-4 text-white outline-none focus:border-primary-500/50 transition-all"
                       placeholder="••••••••"
-                      required
+                      required={!isEditMode}
                     />
                   </div>
                 </div>
@@ -240,7 +279,7 @@ export default function UserManagement() {
                     disabled={isLoading}
                     className="px-12 h-12 bg-primary-500 hover:bg-primary-600 text-white font-bold rounded-xl flex items-center gap-2 shadow-lg shadow-primary-500/20 transition-all disabled:opacity-50"
                   >
-                    {isLoading ? <div className="w-5 h-5 border-2 border-white/30 border-t-white rounded-full animate-spin" /> : 'إضافة المستخدم'}
+                    {isLoading ? <div className="w-5 h-5 border-2 border-white/30 border-t-white rounded-full animate-spin" /> : (isEditMode ? 'تحديث البيانات' : 'إضافة المستخدم')}
                   </button>
                 </div>
               </form>

@@ -151,6 +151,49 @@ app.delete('/api/admins/:id', authenticateToken, async (req, res) => {
   }
 });
 
+app.put('/api/admins/:id', authenticateToken, async (req, res) => {
+  try {
+    const { id } = req.params;
+    const { username, password, permissions } = req.body;
+
+    // Only super-admin or the user themselves (for username/password only)
+    if (!req.user.is_super_admin && req.user.id !== id) {
+      return res.status(403).json({ error: 'Unauthorized' });
+    }
+
+    // sub-admin cannot change their own permissions
+    if (!req.user.is_super_admin && permissions) {
+      return res.status(403).json({ error: 'Sub-admins cannot modify their own permissions' });
+    }
+
+    let queryStr = 'UPDATE admins SET username = $1';
+    const params = [username];
+    let paramIndex = 2;
+
+    if (password) {
+      const hashedPassword = await bcrypt.hash(password, 10);
+      queryStr += `, password = $${paramIndex}`;
+      params.push(hashedPassword);
+      paramIndex++;
+    }
+
+    if (permissions && req.user.is_super_admin) {
+      queryStr += `, permissions = $${paramIndex}`;
+      params.push(JSON.stringify(permissions));
+      paramIndex++;
+    }
+
+    queryStr += ` WHERE id = $${paramIndex}`;
+    params.push(id);
+
+    await db.query(queryStr, params);
+    res.json({ success: true });
+  } catch (err) {
+    console.error('Update admin error:', err);
+    res.status(500).json({ error: 'Internal server error' });
+  }
+});
+
 // === UPLOAD API (Cloudinary + Dynamic Folders) ===
 app.post('/api/upload', authenticateToken, upload.single('image'), async (req, res) => {
   try {

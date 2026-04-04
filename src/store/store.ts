@@ -93,12 +93,13 @@ interface AppState {
   admins: AdminUser[];
   fetchAdmins: () => Promise<void>;
   addAdmin: (data: any) => Promise<boolean>;
+  updateAdmin: (id: string, data: any) => Promise<boolean>;
   deleteAdmin: (id: string) => Promise<boolean>;
 }
 
 export const useStore = create<AppState>()(
   persist(
-    (set) => ({
+    (set, get) => ({
       theme: 'dark',
       rtl: true,
       cardStyle: 'floating',
@@ -197,6 +198,20 @@ export const useStore = create<AppState>()(
       addAdmin: async (data) => {
         try {
           await api.post('/admins', data);
+          return true;
+        } catch (error) {
+          return false;
+        }
+      },
+      updateAdmin: async (id, data) => {
+        try {
+          await api.put(`/admins/${id}`, data);
+          // If updating current user, refresh store user data
+          if (get().user?.id === id) {
+            const upUser = { ...get().user!, ...data };
+            if (data.permissions) upUser.permissions = data.permissions;
+            set({ user: upUser });
+          }
           return true;
         } catch (error) {
           return false;
