@@ -1,0 +1,63 @@
+import { useEffect, useState } from 'react';
+import { useStore } from '../store/store';
+import { api } from '../api';
+import { motion, AnimatePresence } from 'framer-motion';
+import { MessageCircle, X } from 'lucide-react';
+
+export default function WhatsAppButton() {
+  const { rtl } = useStore();
+  const [data, setData] = useState<any>(null);
+  const [showTooltip, setShowTooltip] = useState(true);
+
+  useEffect(() => {
+    api.get('/settings')
+      .then(res => {
+        if (res.data.whatsapp_enabled === 'true') {
+          setData(res.data);
+        }
+      })
+      .catch(console.error);
+    
+    const timer = setTimeout(() => setShowTooltip(false), 8000);
+    return () => clearTimeout(timer);
+  }, []);
+
+  if (!data || !data.whatsapp_phone) return null;
+
+  const handleOpen = () => {
+    const url = `https://wa.me/${data.whatsapp_phone.replace(/\+/g, '')}?text=${encodeURIComponent(data.whatsapp_message || '')}`;
+    window.open(url, '_blank');
+  };
+
+  return (
+    <div className="fixed bottom-8 right-8 z-[60] flex flex-col items-end gap-3 rtl:left-8 rtl:right-auto rtl:items-start">
+       <AnimatePresence>
+         {showTooltip && (
+           <motion.div 
+             initial={{ opacity: 0, x: 20 }}
+             animate={{ opacity: 1, x: 0 }}
+             exit={{ opacity: 0, x: 20 }}
+             className="bg-white dark:bg-slate-800 shadow-2xl rounded-2xl p-4 border border-white/20 relative"
+           >
+              <button onClick={() => setShowTooltip(false)} className="absolute -top-2 -right-2 bg-slate-200 dark:bg-slate-700 rounded-full p-1 shadow-md">
+                 <X size={12} />
+              </button>
+              <p className="text-sm font-bold pr-2">{rtl ? 'نتواجد هنا لمساعدتك!' : 'We are here to help!'}</p>
+           </motion.div>
+         )}
+       </AnimatePresence>
+
+       <motion.button
+         whileHover={{ scale: 1.1 }}
+         whileTap={{ scale: 0.9 }}
+         initial={{ scale: 0 }}
+         animate={{ scale: 1 }}
+         onClick={handleOpen}
+         className="w-16 h-16 bg-[#25D366] text-white rounded-full flex items-center justify-center shadow-[0_10px_30px_rgba(37,211,102,0.4)] relative group"
+       >
+          <MessageCircle size={32} />
+          <span className="absolute inset-0 rounded-full bg-[#25D366] animate-ping opacity-25 group-hover:hidden"></span>
+       </motion.button>
+    </div>
+  );
+}
