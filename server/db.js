@@ -1,6 +1,7 @@
 import pkg from 'pg';
 const { Pool } = pkg;
 import dotenv from 'dotenv';
+import bcrypt from 'bcryptjs';
 import path from 'path';
 import { fileURLToPath } from 'url';
 
@@ -125,7 +126,27 @@ const initDB = async () => {
         status TEXT DEFAULT 'active',
         created_at TIMESTAMPTZ DEFAULT CURRENT_TIMESTAMP
       );
+
+      CREATE TABLE IF NOT EXISTS admins (
+        id TEXT PRIMARY KEY,
+        username TEXT UNIQUE NOT NULL,
+        password TEXT NOT NULL,
+        permissions JSONB DEFAULT '[]',
+        is_super_admin BOOLEAN DEFAULT FALSE,
+        created_at TIMESTAMPTZ DEFAULT CURRENT_TIMESTAMP
+      );
     `);
+
+    // Seed initial admin if not exists
+    const adminCheck = await query('SELECT * FROM admins WHERE username = $1', ['admin']);
+    if (adminCheck.rows.length === 0) {
+      const hashedPassword = await bcrypt.hash('1', 10);
+      await query(
+        'INSERT INTO admins (id, username, password, is_super_admin, permissions) VALUES ($1, $2, $3, $4, $5)',
+        ['admin-1', 'admin', hashedPassword, true, JSON.stringify(['all'])]
+      );
+      console.log('👤 Default admin user created (admin/1)');
+    }
     console.log('✅ PostgreSQL Tables initialized successfully');
   } catch (err) {
     console.error('❌ Error initializing PostgreSQL tables:', err);

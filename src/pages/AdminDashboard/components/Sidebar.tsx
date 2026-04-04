@@ -1,6 +1,17 @@
-import { LayoutDashboard, ShoppingBag, ListOrdered, Users, Settings, Tag, Layout, X } from 'lucide-react';
+import { 
+  LayoutDashboard, 
+  ShoppingBag, 
+  ListOrdered, 
+  Users, 
+  Settings, 
+  Tag, 
+  Layout, 
+  X,
+  LogOut,
+  Shield
+} from 'lucide-react';
 import { useStore } from '../../../store/store';
-import { Link, useLocation } from 'react-router-dom';
+import { Link, useLocation, useNavigate } from 'react-router-dom';
 import { motion, AnimatePresence } from 'framer-motion';
 
 interface SidebarProps {
@@ -9,30 +20,70 @@ interface SidebarProps {
 }
 
 export default function Sidebar({ isOpen, onClose }: SidebarProps) {
-  const { rtl } = useStore();
+  const { rtl, user, logout } = useStore();
   const location = useLocation();
+  const navigate = useNavigate();
+
+  const handleLogout = () => {
+    logout();
+    navigate('/admin/login');
+  };
 
   const tabs = [
     { id: 'overview', icon: LayoutDashboard, label: rtl ? 'نظرة عامة' : 'Overview', path: '/admin' },
     { id: 'products', icon: ShoppingBag, label: rtl ? 'المنتجات' : 'Products', path: '/admin/products' },
-    { id: 'slider', icon: Layout, label: rtl ? 'السلايدر الرئيسي' : 'Home Slider', path: '/admin/slider' },
+    { id: 'slides', icon: Layout, label: rtl ? 'السلايدر الرئيسي' : 'Home Slider', path: '/admin/slider' },
     { id: 'categories', icon: Tag, label: rtl ? 'التصنيفات' : 'Categories', path: '/admin/categories' },
     { id: 'coupons', icon: Tag, label: rtl ? 'كوبونات الخصم' : 'Coupons', path: '/admin/coupons' },
     { id: 'orders', icon: ListOrdered, label: rtl ? 'الطلبات' : 'Orders', path: '/admin/orders' },
     { id: 'customers', icon: Users, label: rtl ? 'العملاء' : 'Customers', path: '/admin/customers' },
+    { id: 'users', icon: Shield, label: rtl ? 'إدارة المستخدمين' : 'User Management', path: '/admin/users', superAdminOnly: true },
     { id: 'settings', icon: Settings, label: rtl ? 'الإعدادات' : 'Settings', path: '/admin/settings' }
   ];
+
+  const filteredTabs = tabs.filter(tab => {
+    if (!user) return false;
+    if (user.is_super_admin) return true;
+    if (tab.superAdminOnly) return false;
+    // Overview is usually allowed for all admins
+    if (tab.id === 'overview') return true;
+    return user.permissions.includes(tab.id) || user.permissions.includes('all');
+  });
 
   return (
     <>
       {/* Desktop Sidebar (Permanent) */}
       <aside className={`hidden lg:flex w-64 glass-card rounded-none border-y-0 h-screen sticky top-0 p-4 flex-col gap-2 ${rtl ? 'border-l border-r-0' : 'border-r border-l-0'}`}>
-        <div className="mb-8 px-4">
+        <div className="mb-8 px-4 py-2 border-b border-white/5">
            <h2 className="text-xl font-black tracking-tighter text-primary-500 uppercase">Packet <span className="text-[10px] bg-primary-500/10 px-2 rounded-full lowercase">admin</span></h2>
         </div>
-        {tabs.map((tab) => (
-          <SidebarLink key={tab.id} tab={tab} rtl={rtl} currentPath={location.pathname} />
-        ))}
+        
+        <div className="flex-grow flex flex-col gap-1 overflow-y-auto pr-2 custom-scrollbar">
+          {filteredTabs.map((tab) => (
+            <SidebarLink key={tab.id} tab={tab} rtl={rtl} currentPath={location.pathname} />
+          ))}
+        </div>
+
+        {/* User Info & Logout */}
+        <div className="mt-auto pt-4 border-t border-white/5 space-y-2">
+          <div className="flex items-center gap-3 px-4 py-3 rounded-2xl bg-white/5">
+            <div className="w-8 h-8 rounded-full bg-primary-500/20 flex items-center justify-center text-primary-500 font-bold text-xs">
+              {user?.username.substring(0, 1).toUpperCase()}
+            </div>
+            <div className="flex-grow min-w-0">
+              <p className="text-white text-xs font-bold truncate">{user?.username}</p>
+              <p className="text-slate-500 text-[10px]">{user?.is_super_admin ? 'مدير عام' : 'مدير فرعي'}</p>
+            </div>
+          </div>
+          
+          <button 
+            onClick={handleLogout}
+            className="w-full flex items-center gap-3 px-4 py-3 rounded-xl text-red-400 hover:bg-red-500/10 transition-all font-bold group"
+          >
+            <LogOut size={18} className="group-hover:scale-110 transition-transform" />
+            <span className="text-sm">{rtl ? 'تسجيل الخروج' : 'Logout'}</span>
+          </button>
+        </div>
       </aside>
 
       {/* Mobile Drawer (Absolute) */}
@@ -46,13 +97,25 @@ export default function Sidebar({ isOpen, onClose }: SidebarProps) {
             className={`lg:hidden fixed top-0 bottom-0 w-64 z-[110] glass-card rounded-none border-y-0 p-4 flex flex-col gap-2 shadow-2xl h-screen ${rtl ? 'right-0 border-l border-r-0' : 'left-0 border-r border-l-0'}`}
           >
             <div className="flex justify-between items-center mb-8 px-4">
-             <h2 className="text-xl font-black tracking-tighter text-primary-500 uppercase">Packet</h2>
-             <button onClick={onClose} className={`p-2 text-slate-400 ${rtl ? '-ml-2' : '-mr-2'}`}><X size={20} /></button>
-          </div>
+               <h2 className="text-xl font-black tracking-tighter text-primary-500 uppercase">Packet</h2>
+               <button onClick={onClose} className={`p-2 text-slate-400 ${rtl ? '-ml-2' : '-mr-2'}`}><X size={20} /></button>
+            </div>
             
-            {tabs.map((tab) => (
-              <SidebarLink key={tab.id} tab={tab} rtl={rtl} currentPath={location.pathname} />
-            ))}
+            <div className="flex-grow flex flex-col gap-1 overflow-y-auto">
+              {filteredTabs.map((tab) => (
+                <SidebarLink key={tab.id} tab={tab} rtl={rtl} currentPath={location.pathname} />
+              ))}
+            </div>
+
+            <div className="mt-auto pt-4 border-t border-white/5 space-y-2">
+              <button 
+                onClick={handleLogout}
+                className="w-full flex items-center gap-3 px-4 py-3 rounded-xl text-red-400 hover:bg-red-500/10 transition-all font-bold"
+              >
+                <LogOut size={18} />
+                <span className="text-sm">{rtl ? 'تسجيل الخروج' : 'Logout'}</span>
+              </button>
+            </div>
           </motion.aside>
         )}
       </AnimatePresence>
@@ -60,7 +123,7 @@ export default function Sidebar({ isOpen, onClose }: SidebarProps) {
   );
 }
 
-function SidebarLink({ tab, currentPath }: { tab: any, rtl: boolean, currentPath: string }) {
+function SidebarLink({ tab, currentPath, rtl }: { tab: any, rtl: boolean, currentPath: string }) {
   const Icon = tab.icon;
   const isActive = currentPath === tab.path || (tab.path !== '/admin' && currentPath.startsWith(tab.path));
   
@@ -75,6 +138,12 @@ function SidebarLink({ tab, currentPath }: { tab: any, rtl: boolean, currentPath
     >
       <Icon size={18} className="shrink-0" />
       <span className="font-bold text-sm tracking-tight">{tab.label}</span>
+      {isActive && (
+        <motion.div 
+          layoutId="activeTab"
+          className={`absolute ${rtl ? 'right-0' : 'left-0'} w-1 h-6 bg-white rounded-full`}
+        />
+      )}
     </Link>
   );
 }

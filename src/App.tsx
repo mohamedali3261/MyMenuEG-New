@@ -24,6 +24,9 @@ import CouponsManager from './pages/AdminDashboard/coupons/CouponsManager';
 import OrderTracking from './pages/OrderTracking/OrderTracking';
 import OrdersList from './pages/AdminDashboard/orders/OrdersList';
 import Settings from './pages/AdminDashboard/settings/Settings';
+import Login from './pages/AdminDashboard/Login';
+import UserManagement from './pages/AdminDashboard/UserManagement';
+import ProtectedRoute from './components/ProtectedRoute';
 
 const BackgroundEffect = ({ style, theme }: { style: string, theme: string }) => {
   if (style === 'blobs') {
@@ -195,17 +198,46 @@ export default function App() {
             <Route path="/disposables" element={<Disposables />} />
             <Route path="/cart" element={<Cart />} />
             
-            <Route path="/admin" element={<AdminLayout />}>
-              <Route index element={<Overview />} />
-              <Route path="products" element={<ProductsList />} />
-              <Route path="products/new" element={<ProductForm />} />
-              <Route path="products/edit/:id" element={<ProductForm />} />
-              <Route path="categories" element={<CategoriesList />} />
-              <Route path="slider" element={<SliderManager />} />
-              <Route path="orders" element={<OrdersList />} />
-              <Route path="customers" element={<CustomersList />} />
-              <Route path="coupons" element={<CouponsManager />} />
-              <Route path="settings" element={<Settings />} />
+            <Route path="/admin/login" element={<Login />} />
+            
+            <Route path="/admin" element={<ProtectedRoute />}>
+              <Route element={<AdminLayout />}>
+                <Route index element={<Overview />} />
+                
+                <Route element={<ProtectedRoute permission="products" />}>
+                  <Route path="products" element={<ProductsList />} />
+                  <Route path="products/new" element={<ProductForm />} />
+                  <Route path="products/edit/:id" element={<ProductForm />} />
+                </Route>
+
+                <Route element={<ProtectedRoute permission="categories" />}>
+                  <Route path="categories" element={<CategoriesList />} />
+                </Route>
+
+                <Route element={<ProtectedRoute permission="slides" />}>
+                  <Route path="slider" element={<SliderManager />} />
+                </Route>
+
+                <Route element={<ProtectedRoute permission="orders" />}>
+                  <Route path="orders" element={<OrdersList />} />
+                </Route>
+
+                <Route element={<ProtectedRoute permission="customers" />}>
+                  <Route path="customers" element={<CustomersList />} />
+                </Route>
+
+                <Route element={<ProtectedRoute permission="coupons" />}>
+                  <Route path="coupons" element={<CouponsManager />} />
+                </Route>
+
+                <Route element={<ProtectedRoute permission="users" />}>
+                   <Route path="users" element={<UserManagement />} />
+                </Route>
+
+                <Route element={<ProtectedRoute permission="settings" />}>
+                  <Route path="settings" element={<Settings />} />
+                </Route>
+              </Route>
             </Route>
             <Route path="/track" element={<OrderTracking />} />
           </Routes>

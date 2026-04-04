@@ -39,6 +39,13 @@ interface Category {
   icon?: string;
 }
 
+interface AdminUser {
+  id: string;
+  username: string;
+  is_super_admin: boolean;
+  permissions: string[];
+}
+
 interface AppState {
   theme: 'dark' | 'light'
   rtl: boolean
@@ -75,6 +82,18 @@ interface AppState {
   // Wishlist State
   wishlist: Product[];
   toggleWishlist: (product: Product) => void;
+
+  // Auth State
+  user: AdminUser | null;
+  token: string | null;
+  login: (credentials: any) => Promise<boolean>;
+  logout: () => void;
+  
+  // Admins Management (Super Admin)
+  admins: AdminUser[];
+  fetchAdmins: () => Promise<void>;
+  addAdmin: (data: any) => Promise<boolean>;
+  deleteAdmin: (id: string) => Promise<boolean>;
 }
 
 export const useStore = create<AppState>()(
@@ -149,6 +168,48 @@ export const useStore = create<AppState>()(
         }
         return { wishlist: [...state.wishlist, product] };
       }),
+
+      // Auth Implementation
+      user: null,
+      token: null,
+      login: async (credentials) => {
+        try {
+          const res = await api.post('/auth/login', credentials);
+          set({ user: res.data.user, token: res.data.token });
+          return true;
+        } catch (error) {
+          console.error('Login failed:', error);
+          return false;
+        }
+      },
+      logout: () => set({ user: null, token: null }),
+
+      // Admins Management
+      admins: [],
+      fetchAdmins: async () => {
+        try {
+          const res = await api.get('/admins');
+          set({ admins: res.data });
+        } catch (error) {
+          console.error('Failed to fetch admins');
+        }
+      },
+      addAdmin: async (data) => {
+        try {
+          await api.post('/admins', data);
+          return true;
+        } catch (error) {
+          return false;
+        }
+      },
+      deleteAdmin: async (id) => {
+        try {
+          await api.delete(`/admins/${id}`);
+          return true;
+        } catch (error) {
+          return false;
+        }
+      }
     }),
     {
       name: 'mymenueg-storage',
@@ -156,12 +217,13 @@ export const useStore = create<AppState>()(
       partialize: (state) => ({
         theme: state.theme,
         rtl: state.rtl,
-        cardStyle: state.cardStyle,
         cardHoverAnimation: state.cardHoverAnimation,
         backgroundStyle: state.backgroundStyle,
         cart: state.cart,
         branding: state.branding,
-        wishlist: state.wishlist          // Correctly persist wishlist
+        wishlist: state.wishlist,
+        user: state.user,
+        token: state.token
       }),
     }
   )
