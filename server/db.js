@@ -17,7 +17,10 @@ const pool = new Pool({
 });
 
 // Helper function for async queries
-export const query = (text, params) => pool.query(text, params);
+export const query = (text, params) => {
+  console.log(`🔍 Executing query: ${text.substring(0, 100)}...`);
+  return pool.query(text, params);
+};
 
 // Initialize Tables
 const initDB = async () => {
@@ -126,6 +129,11 @@ const initDB = async () => {
     console.log('✅ PostgreSQL Tables initialized successfully');
   } catch (err) {
     console.error('❌ Error initializing PostgreSQL tables:', err);
+    console.error('❌ Database Connection Error Details:', {
+      message: err.message,
+      code: err.code,
+      stack: err.stack
+    });
   }
 };
 
