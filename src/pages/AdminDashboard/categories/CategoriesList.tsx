@@ -4,9 +4,18 @@ import { Plus, Trash2, Tag, Loader2 } from 'lucide-react';
 import { api } from '../../../api';
 import ConfirmModal from '../components/ConfirmModal';
 
+interface CategoryItem {
+  id: string;
+  name_ar: string;
+  name_en: string;
+  subtitle_ar?: string;
+  subtitle_en?: string;
+  status?: string;
+}
+
 export default function CategoriesList() {
   const { rtl, showToast } = useStore();
-  const [categories, setCategories] = useState<any[]>([]);
+  const [categories, setCategories] = useState<CategoryItem[]>([]);
   const [loading, setLoading] = useState(true);
   
   // Modal State
@@ -17,7 +26,14 @@ export default function CategoriesList() {
 
   // Add state
   const [adding, setAdding] = useState(false);
-  const [newCat, setNewCat] = useState({ name_ar: '', name_en: '', icon: 'Tag', status: 'active' });
+  const [newCat, setNewCat] = useState({ 
+    name_ar: '', 
+    name_en: '', 
+    subtitle_ar: '', 
+    subtitle_en: '', 
+    icon: 'Tag', 
+    status: 'active' 
+  });
 
   const fetchCategories = () => {
     setLoading(true);
@@ -38,7 +54,14 @@ export default function CategoriesList() {
     setAdding(true);
     try {
       await api.post('/categories', newCat);
-      setNewCat({ name_ar: '', name_en: '', icon: 'Tag', status: 'active' });
+      setNewCat({ 
+        name_ar: '', 
+        name_en: '', 
+        subtitle_ar: '', 
+        subtitle_en: '', 
+        icon: 'Tag', 
+        status: 'active' 
+      });
       fetchCategories();
       showToast(rtl ? 'تم إضافة القسم بنجاح' : 'Category added successfully', 'success');
     } catch(err) {
@@ -83,6 +106,14 @@ export default function CategoriesList() {
               <label className="block text-sm font-medium mb-1">{rtl ? 'الاسم (إنجليزي)' : 'Name (English)'}</label>
               <input value={newCat.name_en} onChange={e => setNewCat({...newCat, name_en: e.target.value})} type="text" dir="ltr" className="w-full bg-slate-100 dark:bg-[#111] border border-slate-300 dark:border-white/10 rounded-xl p-3 focus:outline-none focus:border-primary-500" placeholder="Perfumes..." />
             </div>
+            <div>
+              <label className="block text-sm font-medium mb-1">{rtl ? 'عنوان فرعي (عربي)' : 'Subtitle (Arabic)'}</label>
+              <input value={newCat.subtitle_ar} onChange={e => setNewCat({...newCat, subtitle_ar: e.target.value})} type="text" className="w-full bg-slate-100 dark:bg-[#111] border border-slate-300 dark:border-white/10 rounded-xl p-3 focus:outline-none focus:border-primary-500" placeholder="أفضل أنواع العطور..." />
+            </div>
+            <div>
+              <label className="block text-sm font-medium mb-1">{rtl ? 'عنوان فرعي (إنجليزي)' : 'Subtitle (English)'}</label>
+              <input value={newCat.subtitle_en} onChange={e => setNewCat({...newCat, subtitle_en: e.target.value})} type="text" dir="ltr" className="w-full bg-slate-100 dark:bg-[#111] border border-slate-300 dark:border-white/10 rounded-xl p-3 focus:outline-none focus:border-primary-500" placeholder="Best perfumes selection..." />
+            </div>
             <button onClick={handleCreate} disabled={adding} className="btn-primary w-full flex items-center justify-center gap-2 mt-4">
               {adding ? <Loader2 size={20} className="animate-spin" /> : <Plus size={20} />}
               {rtl ? 'حفظ للتصنيفات' : 'Save Category'}
@@ -107,9 +138,12 @@ export default function CategoriesList() {
                      <Tag size={24} />
                    </div>
                    <div>
-                     <h3 className="font-bold text-lg">{rtl ? cat.name_ar : cat.name_en}</h3>
-                     <span className="text-sm text-slate-500">{rtl ? cat.name_en : cat.name_ar}</span>
-                   </div>
+                      <h3 className="font-bold text-lg leading-tight">{rtl ? cat.name_ar : cat.name_en}</h3>
+                      {cat.subtitle_ar && (
+                        <p className="text-xs text-slate-500 mt-0.5 mb-1">{rtl ? cat.subtitle_ar : cat.subtitle_en}</p>
+                      )}
+                      <span className="text-[10px] text-slate-400 uppercase tracking-tighter">{rtl ? cat.name_en : cat.name_ar}</span>
+                    </div>
                  </div>
                  <div className="flex items-center gap-3">
                    <span className="px-3 py-1 bg-green-500/10 text-green-500 rounded-full text-xs font-bold">

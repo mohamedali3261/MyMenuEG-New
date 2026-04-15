@@ -5,9 +5,20 @@ import { api } from '../../../api';
 import ConfirmModal from '../components/ConfirmModal';
 import PremiumDropdown from '../../../components/ui/PremiumDropdown';
 
+interface CouponItem {
+  id: string;
+  code: string;
+  type: 'percent' | 'fixed';
+  value: number;
+  min_order: number;
+  usage_limit: number;
+  used_count: number;
+  status: string;
+}
+
 export default function CouponsManager() {
   const { rtl, showToast } = useStore();
-  const [coupons, setCoupons] = useState<any[]>([]);
+  const [coupons, setCoupons] = useState<CouponItem[]>([]);
   const [loading, setLoading] = useState(true);
   const [showForm, setShowForm] = useState(false);
   const [saving, setSaving] = useState(false);
@@ -73,7 +84,7 @@ export default function CouponsManager() {
     }
   };
 
-  const openEdit = (coupon: any) => {
+  const openEdit = (coupon: CouponItem) => {
     setFormData(coupon);
     setShowForm(true);
   };

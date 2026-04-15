@@ -4,13 +4,22 @@ import { ClassicElegantCard, Floating3DCard, MinimalPosterCard } from './Product
 import { useEffect, useState } from 'react';
 import { api } from '../../../api';
 
+interface FeaturedProduct {
+  id: string;
+  name_ar: string;
+  name_en: string;
+  price: number;
+  image_url?: string;
+  images?: string[];
+}
+
 export default function FeaturedProducts() {
   const { rtl, addToCart, cardStyle } = useStore();
-  const [products, setProducts] = useState<any[]>([]);
+  const [products, setProducts] = useState<FeaturedProduct[]>([]);
 
   useEffect(() => {
     api.get('/products')
-      .then((res: any) => setProducts(res.data.slice(0, 4))) // Featured gets Top 4
+      .then((res: { data: FeaturedProduct[] }) => setProducts(res.data.slice(0, 4))) // Featured gets Top 4
       .catch(console.error);
   }, []);
 

@@ -8,13 +8,29 @@ import ProductCard from '../../../components/ProductCard';
 
 export default function BestSellers() {
   const { rtl } = useStore();
-  const [products, setProducts] = useState<any[]>([]);
+  const [products, setProducts] = useState<Array<{
+    id: string;
+    name_ar: string;
+    name_en: string;
+    description_ar: string;
+    description_en: string;
+    price: number;
+    is_best_seller?: number;
+  }>>([]);
   const [loading, setLoading] = useState(true);
 
   useEffect(() => {
     api.get('/products')
       .then(res => {
-        const bestSellers = res.data.filter((p: any) => p.is_best_seller === 1);
+        const bestSellers = (res.data as Array<{
+          id: string;
+          name_ar: string;
+          name_en: string;
+          description_ar: string;
+          description_en: string;
+          price: number;
+          is_best_seller?: number;
+        }>).filter((p) => p.is_best_seller === 1);
         setProducts(bestSellers);
       })
       .catch(console.error)

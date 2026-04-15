@@ -9,7 +9,16 @@ interface CategoryCarouselProps {
     name_ar: string;
     name_en: string;
   };
-  products: any[];
+  products: Array<{
+    id: string;
+    name_ar: string;
+    name_en: string;
+    description_ar: string;
+    description_en: string;
+    price: number;
+    image_url?: string;
+    images?: string[];
+  }>;
 }
 
 export default function CategorySection({ category, products }: CategoryCarouselProps) {
@@ -28,11 +37,11 @@ export default function CategorySection({ category, products }: CategoryCarousel
                 {rtl ? 'تصفح القسم' : 'BROWSE CATEGORY'}
               </span>
            </div>
-           <h2 className="text-2xl md:text-3xl font-black tracking-tight">
+           <h2 className="text-2xl md:text-3xl font-black tracking-tight text-primary-600 dark:text-primary-400">
              {rtl ? category.name_ar : category.name_en}
            </h2>
         </div>
-        <button className="group flex items-center gap-2 text-xs font-bold opacity-60 hover:opacity-100 transition-all">
+        <button className="group flex items-center gap-2 text-xs font-bold text-accent-600 dark:text-accent-400 opacity-70 hover:opacity-100 transition-all">
            {rtl ? 'عرض الكل' : 'View All'}
            <ChevronRight size={16} className={`transition-transform ${rtl ? 'rotate-180 group-hover:-translate-x-1' : 'group-hover:translate-x-1'}`} />
         </button>

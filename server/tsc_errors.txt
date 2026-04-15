@@ -1,0 +1,36 @@
+﻿src/controllers/categoryController.ts(54,16): error TS2322: Type 'string | string[]' is not assignable to type 'string | undefined'.
+  Type 'string[]' is not assignable to type 'string'.
+src/controllers/categoryController.ts(62,47): error TS2322: Type 'string | string[]' is not assignable to type 'string | undefined'.
+  Type 'string[]' is not assignable to type 'string'.
+src/controllers/couponController.ts(76,44): error TS2322: Type 'string | string[]' is not assignable to type 'string | undefined'.
+  Type 'string[]' is not assignable to type 'string'.
+src/controllers/databaseController.ts(60,49): error TS2345: Argument of type 'string | string[]' is not assignable to parameter of type 'string'.
+  Type 'string[]' is not assignable to type 'string'.
+src/controllers/databaseController.ts(62,51): error TS2339: Property 'endsWith' does not exist on type 'string | string[]'.
+  Property 'endsWith' does not exist on type 'string[]'.
+src/controllers/orderController.ts(59,16): error TS2322: Type 'string | string[]' is not assignable to type 'string | undefined'.
+  Type 'string[]' is not assignable to type 'string'.
+src/controllers/orderController.ts(131,18): error TS2322: Type 'string | string[]' is not assignable to type 'string | undefined'.
+  Type 'string[]' is not assignable to type 'string'.
+src/controllers/orderController.ts(136,11): error TS2322: Type 'string | string[]' is not assignable to type 'string | null | undefined'.
+  Type 'string[]' is not assignable to type 'string'.
+src/controllers/orderController.ts(155,43): error TS2322: Type 'string | string[]' is not assignable to type 'string | undefined'.
+  Type 'string[]' is not assignable to type 'string'.
+src/controllers/pageController.ts(57,48): error TS2322: Type 'string | string[]' is not assignable to type 'string | undefined'.
+  Type 'string[]' is not assignable to type 'string'.
+src/controllers/productController.ts(68,16): error TS2322: Type 'string | string[]' is not assignable to type 'string | undefined'.
+  Type 'string[]' is not assignable to type 'string'.
+src/controllers/productController.ts(83,22): error TS2339: Property 'product_specs' does not exist on type '{ id: string; category_id: string | null; page_id: string | null; description_ar: string | null; name_en: string | null; name_ar: string | null; description_en: string | null; price: number | null; ... 12 more ...; carton_details_en: string | null; }'.
+src/controllers/productController.ts(84,23): error TS2339: Property 'product_images' does not exist on type '{ id: string; category_id: string | null; page_id: string | null; description_ar: string | null; name_en: string | null; name_ar: string | null; description_en: string | null; price: number | null; ... 12 more ...; carton_details_en: string | null; }'.
+src/controllers/productController.ts(84,42): error TS7006: Parameter 'img' implicitly has an 'any' type.
+src/controllers/productController.ts(85,32): error TS2339: Property 'product_quantity_prices' does not exist on type '{ id: string; category_id: string | null; page_id: string | null; description_ar: string | null; name_en: string | null; name_ar: string | null; description_en: string | null; price: number | null; ... 12 more ...; carton_details_en: string | null; }'.
+src/controllers/productController.ts(203,16): error TS2322: Type 'string | string[]' is not assignable to type 'string | undefined'.
+  Type 'string[]' is not assignable to type 'string'.
+src/controllers/productController.ts(211,17): error TS2339: Property 'product_images' does not exist on type '{ id: string; category_id: string | null; page_id: string | null; description_ar: string | null; name_en: string | null; name_ar: string | null; description_en: string | null; price: number | null; ... 12 more ...; carton_details_en: string | null; }'.
+src/controllers/productController.ts(211,40): error TS7006: Parameter 'img' implicitly has an 'any' type.
+src/controllers/productController.ts(215,45): error TS2322: Type 'string | string[]' is not assignable to type 'string | undefined'.
+  Type 'string[]' is not assignable to type 'string'.
+src/controllers/slideController.ts(76,66): error TS2322: Type 'string | string[]' is not assignable to type 'string | undefined'.
+  Type 'string[]' is not assignable to type 'string'.
+src/controllers/slideController.ts(81,48): error TS2322: Type 'string | string[]' is not assignable to type 'string | undefined'.
+  Type 'string[]' is not assignable to type 'string'.

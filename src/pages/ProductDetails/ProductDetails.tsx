@@ -18,10 +18,15 @@ import ProductSections from './components/ProductSections';
 import ProductTrustBadges from './components/ProductTrustBadges';
 import ProductCard from '../../components/ProductCard';
 
+type QuantityVariant = { quantity_label: string; price: number; old_price?: number };
+type RealVariant = { label_ar?: string; label_en?: string; sku?: string; price: number; old_price?: number; stock?: number; is_default?: boolean; image_url?: string; imageUrl?: string };
+
 export default function ProductDetails() {
   const { id } = useParams();
-  const { products, isDataLoaded, rtl, addToCart, wishlist, toggleWishlist, showToast, branding } = useStore();
+  const { products, pages, isDataLoaded, rtl, addToCart, wishlist, toggleWishlist, showToast, branding } = useStore();
   const [scrolled, setScrolled] = useState(false);
+  const [selectedVariantDoc, setSelectedVariantDoc] = useState<QuantityVariant | null>(null);
+  const [selectedRealVariant, setSelectedRealVariant] = useState<RealVariant | null>(null);
 
   useEffect(() => {
     window.scrollTo(0, 0);
@@ -44,7 +49,7 @@ export default function ProductDetails() {
 
   if (!isDataLoaded) {
     return (
-      <div className="min-h-screen flex items-center justify-center bg-slate-50 dark:bg-[#070707]">
+      <div className="min-h-screen flex items-center justify-center bg-transparent dark:bg-[#070707]">
         <div className="relative">
            <div className="w-20 h-20 border-4 border-primary-500/20 border-t-primary-500 rounded-full animate-spin"></div>
            <div className="absolute inset-0 flex items-center justify-center">
@@ -57,7 +62,7 @@ export default function ProductDetails() {
 
   if (!product || !isAvailable) {
     return (
-      <div className="min-h-screen flex flex-col items-center justify-center text-center px-6 bg-slate-50 dark:bg-[#070707]">
+      <div className="min-h-screen flex flex-col items-center justify-center text-center px-6 bg-transparent dark:bg-[#070707]">
         <motion.div 
           initial={{ opacity: 0, y: 20 }}
           animate={{ opacity: 1, y: 0 }}
@@ -78,23 +83,34 @@ export default function ProductDetails() {
   }
 
   return (
-    <div className="relative pb-24 lg:pb-12 overflow-hidden bg-slate-50 dark:bg-[#070707] transition-colors duration-500">
+    <div className="relative pb-16 lg:pb-10 overflow-hidden bg-transparent dark:bg-[#070707] transition-colors duration-500">
       {/* Cinematic Background Lume */}
       <div className="absolute top-0 left-1/2 -translate-x-1/2 w-full max-w-[1200px] h-[800px] bg-primary-500/[0.07] dark:bg-primary-500/10 blur-[150px] -z-10 rounded-full opacity-50" />
       <div className="absolute top-[800px] -right-64 w-[600px] h-[600px] bg-accent-500/[0.03] dark:bg-accent-500/5 blur-[120px] -z-10 rounded-full opacity-30" />
 
       {/* Breadcrumbs */}
-      <div className="container mx-auto px-6 py-8">
+      <div className="container mx-auto max-w-6xl px-4 py-6">
         <nav className="flex items-center gap-2 text-sm text-slate-400 font-bold overflow-x-auto whitespace-nowrap scrollbar-hide">
           <Link to="/" className="hover:text-primary-500 transition-colors flex items-center gap-1 shrink-0">
             <Home size={14} />
             {rtl ? 'الرئيسية' : 'Home'}
           </Link>
           <ChevronRight size={14} className={`shrink-0 ${rtl ? 'rotate-180' : ''}`} />
-          <Link to={`/disposables`} className="hover:text-primary-500 transition-colors shrink-0">
-            {rtl ? 'الأقسام' : 'Categories'}
-          </Link>
-          <ChevronRight size={14} className={`shrink-0 ${rtl ? 'rotate-180' : ''}`} />
+          {product.page_id ? (
+            <>
+              <Link to={`/p/${pages.find(p => p.id === product.page_id)?.slug || 'disposables'}`} className="hover:text-primary-500 transition-colors shrink-0">
+                {rtl ? pages.find(p => p.id === product.page_id)?.name_ar : pages.find(p => p.id === product.page_id)?.name_en}
+              </Link>
+              <ChevronRight size={14} className={`shrink-0 ${rtl ? 'rotate-180' : ''}`} />
+            </>
+          ) : (
+            <>
+              <Link to={`/products`} className="hover:text-primary-500 transition-colors shrink-0">
+                {rtl ? 'المنتجات' : 'Products'}
+              </Link>
+              <ChevronRight size={14} className={`shrink-0 ${rtl ? 'rotate-180' : ''}`} />
+            </>
+          )}
           <span className="text-slate-900 dark:text-white truncate max-w-[200px] shrink-0 font-black uppercase tracking-tight">
             {rtl ? product.name_ar : product.name_en}
           </span>
@@ -102,8 +118,8 @@ export default function ProductDetails() {
       </div>
 
       {/* Main Content */}
-      <div className="container mx-auto px-6">
-        <div className="grid lg:grid-cols-2 gap-16 lg:gap-24 items-start">
+      <div className="container mx-auto max-w-6xl px-4">
+        <div className="grid lg:grid-cols-2 gap-10 lg:gap-14 items-start">
           {/* Gallery Sticky Column */}
           <div className="lg:sticky lg:top-32">
             <motion.div
@@ -113,7 +129,12 @@ export default function ProductDetails() {
               className="relative"
             >
                <div className="absolute -inset-8 bg-primary-500/[0.05] blur-[100px] rounded-[5rem] -z-10" />
-               <ProductGallery images={product.images && product.images.length > 0 ? product.images : [product.image_url]} />
+               <ProductGallery
+                 images={[
+                   selectedRealVariant?.image_url || selectedRealVariant?.imageUrl,
+                   ...(product.images && product.images.length > 0 ? product.images : [product.image_url])
+                 ].filter(Boolean) as string[]}
+               />
             </motion.div>
           </div>
 
@@ -122,10 +143,10 @@ export default function ProductDetails() {
             initial={{ opacity: 0, x: 50 }}
             animate={{ opacity: 1, x: 0 }}
             transition={{ duration: 0.8, delay: 0.2 }}
-            className="space-y-12"
+            className="space-y-8"
           >
-            <ProductInfo product={product} />
-            <div className="pt-8 border-t border-slate-200 dark:border-white/10">
+            <ProductInfo product={product} onVariantChange={setSelectedVariantDoc} onRealVariantSelect={setSelectedRealVariant} />
+            <div className="pt-6 border-t border-slate-200 dark:border-white/10">
                <ProductTrustBadges />
             </div>
           </motion.div>
@@ -134,17 +155,18 @@ export default function ProductDetails() {
         {/* Detailed Sections (Stacked Vertically) */}
         <ProductSections 
           description={rtl ? product.description_ar : product.description_en} 
-          specs={product.specs?.map((s: any) => ({ key: rtl ? s.key_ar : s.key_en, value: rtl ? s.val_ar : s.val_en })) || []}
+          specs={product.specs?.map((s: { key_ar?: string; key_en?: string; val_ar?: string; val_en?: string }) => ({ key: rtl ? s.key_ar : s.key_en, value: rtl ? s.val_ar : s.val_en })) || []}
           shipping={rtl ? product.shipping_info_ar ?? '' : product.shipping_info_en ?? ''}
           warranty={rtl ? product.warranty_info_ar ?? '' : product.warranty_info_en ?? ''}
+          extraDetails={product.detail_items}
         />
 
         {/* Related Products */}
         {related.length > 0 && (
-          <div className="mt-20">
-            <div className="flex items-center justify-between mb-10">
+          <div className="mt-14">
+            <div className="flex items-center justify-between mb-7">
                <div className="space-y-1">
-                 <h2 className="text-2xl lg:text-3xl font-black text-slate-900 dark:text-white uppercase tracking-tight">{rtl ? 'قـد يـعجبك أيضاً' : 'Suggestons'}</h2>
+                 <h2 className="text-xl lg:text-2xl font-black text-slate-900 dark:text-white uppercase tracking-tight">{rtl ? 'قـد يـعجبك أيضاً' : 'Suggestons'}</h2>
                  <p className="text-slate-500 dark:text-slate-400 font-bold uppercase tracking-[0.2em] text-[8px]">{rtl ? 'منتجات مختارة' : 'Handpicked for you'}</p>
                </div>
                <div className="h-px flex-grow mx-8 bg-gradient-to-r from-primary-500/20 via-slate-500/10 to-transparent hidden xl:block" />
@@ -153,7 +175,7 @@ export default function ProductDetails() {
                  <ChevronRight size={14} className={`${rtl ? 'rotate-180' : ''} group-hover:translate-x-1 transition-transform`} />
                </Link>
             </div>
-            <div className="grid grid-cols-2 lg:grid-cols-4 gap-6">
+            <div className="grid grid-cols-2 lg:grid-cols-4 gap-4">
               {related.map(p => (
                 <ProductCard key={p.id} product={p} />
               ))}
@@ -175,15 +197,29 @@ export default function ProductDetails() {
                 <div className="flex flex-col items-start px-4 border-r border-slate-200 dark:border-white/10 shrink-0">
                    <span className="text-[7px] font-black uppercase tracking-[0.2em] text-slate-500 mb-0.5">{rtl ? 'السعر' : 'PRICE'}</span>
                    <div className="flex flex-col">
-                      {product.old_price > product.price && (
-                        <span className="text-[10px] text-rose-500 font-bold line-through -mb-1 opacity-70">
-                          {product.old_price}
-                        </span>
+                      {selectedVariantDoc ? (
+                         <>
+                            {selectedVariantDoc.old_price && selectedVariantDoc.old_price > selectedVariantDoc.price && (
+                                <span className="text-[10px] text-rose-500 font-bold line-through -mb-1 opacity-70">
+                                  {selectedVariantDoc.old_price}
+                                </span>
+                            )}
+                            <span className="text-base font-black text-slate-900 dark:text-white whitespace-nowrap">
+                              <span className="text-[10px] opacity-40 mr-0.5">EGP</span>{selectedVariantDoc.price}
+                            </span>
+                         </>
+                      ) : (
+                         <>
+                            {product.old_price > product.price && (
+                              <span className="text-[10px] text-rose-500 font-bold line-through -mb-1 opacity-70">
+                                {product.old_price}
+                              </span>
+                            )}
+                            <span className="text-base font-black text-slate-900 dark:text-white whitespace-nowrap">
+                              <span className="text-[10px] opacity-40 mr-0.5">EGP</span>{product.price}
+                            </span>
+                         </>
                       )}
-                      <span className="text-base font-black text-slate-900 dark:text-white whitespace-nowrap">
-                        <span className="text-[10px] opacity-40 mr-0.5">EGP</span>
-                        {product.price}
-                      </span>
                    </div>
                 </div>
                 <button 
@@ -194,7 +230,14 @@ export default function ProductDetails() {
                 </button>
                 <button 
                  onClick={() => {
-                   addToCart({ id: product.id, name: rtl ? product.name_ar : product.name_en, price: product.price, quantity: 1, image: product.image_url || (product.images && product.images[0]) });
+                   addToCart({ 
+                     id: product.id, 
+                     name: rtl ? product.name_ar : product.name_en, 
+                     price: selectedVariantDoc ? selectedVariantDoc.price : product.price, 
+                     quantity: 1, 
+                     image: product.image_url || (product.images && product.images[0]),
+                     variant: selectedVariantDoc?.quantity_label 
+                   });
                    showToast(rtl ? 'تمت الإضافة للسلة' : 'Added to cart!');
                  }}
                  className="btn-primary flex-grow h-14 rounded-2xl flex items-center justify-center gap-3 font-black uppercase text-[10px] tracking-[0.2em] shadow-xl shadow-primary-500/30 group"

@@ -1,8 +1,11 @@
 import { useStore } from '../../../store/store';
+import BrandingPanel from './components/BrandingPanel';
+import LoadingScreenPanel from './components/LoadingScreenPanel';
 import CardStylePanel from './components/CardStylePanel';
 import BackgroundStylePanel from './components/BackgroundStylePanel';
 import MarketingPanel from './components/MarketingPanel';
-import BrandingPanel from './components/BrandingPanel';
+import FaqSettingsPanel from './components/FaqSettingsPanel';
+import NotFoundSettingsPanel from './components/NotFoundSettingsPanel';
 
 export default function Settings() {
   const { rtl } = useStore();
@@ -15,9 +18,12 @@ export default function Settings() {
 
       {/* Extracted Panels */}
       <BrandingPanel />
+      <LoadingScreenPanel />
       <CardStylePanel />
       <BackgroundStylePanel />
       <MarketingPanel />
+      <FaqSettingsPanel />
+      <NotFoundSettingsPanel />
 
     </div>
   )

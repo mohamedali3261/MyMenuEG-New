@@ -3,10 +3,27 @@ import { useStore } from '../../../store/store';
 import { Plus, Trash2, Layout, Image as ImageIcon, Loader2, Save } from 'lucide-react';
 import { api } from '../../../api';
 import ConfirmModal from '../components/ConfirmModal';
+import PremiumDropdown from '../../../components/ui/PremiumDropdown';
+import { SLIDER_TEMPLATES } from './sliderTemplates';
+import { resolveAssetUrl } from '../../../utils/assetUrl';
+
+type Slide = {
+  id: string;
+  image_url: string;
+  title_ar: string;
+  title_en: string;
+  subtitle_ar: string;
+  subtitle_en: string;
+  btn_text_ar: string;
+  btn_text_en: string;
+  btn_link: string;
+  order_index: number;
+  page_id: string;
+};
 
 export default function SliderManager() {
-  const { rtl, showToast } = useStore();
-  const [slides, setSlides] = useState<any[]>([]);
+  const { rtl, showToast, pages } = useStore();
+  const [slides, setSlides] = useState<Slide[]>([]);
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
   const [interval, setIntervalVal] = useState('3'); // Duration in seconds
@@ -29,8 +46,10 @@ export default function SliderManager() {
     btn_text_ar: '',
     btn_text_en: '',
     btn_link: '/products',
-    order_index: 0
+    order_index: 0,
+    page_id: ''
   });
+  const [templateKey, setTemplateKey] = useState('');
 
   const fetchSlides = () => {
     setLoading(true);
@@ -59,7 +78,7 @@ export default function SliderManager() {
       const res = await api.post('/upload', fd);
       setFormData({ ...formData, image_url: res.data.url });
       showToast(rtl ? 'تم رفع الصورة بنجاح' : 'Image uploaded successfully');
-    } catch (err) {
+    } catch {
       showToast('Error uploading image', 'error');
     } finally {
       setSaving(false);
@@ -73,9 +92,9 @@ export default function SliderManager() {
       await api.post('/slides', formData);
       showToast(rtl ? 'تم حفظ الشريحة بنجاح' : 'Slide saved successfully');
       setShowForm(false);
-      setFormData({ id: '', image_url: '', title_ar: '', title_en: '', subtitle_ar: '', subtitle_en: '', btn_text_ar: '', btn_text_en: '', btn_link: '/products', order_index: slides.length });
+      setFormData({ id: '', image_url: '', title_ar: '', title_en: '', subtitle_ar: '', subtitle_en: '', btn_text_ar: '', btn_text_en: '', btn_link: '/products', order_index: slides.length, page_id: '' });
       fetchSlides();
-    } catch (err) {
+    } catch {
       showToast('Error saving slide', 'error');
     } finally {
       setSaving(false);
@@ -89,14 +108,32 @@ export default function SliderManager() {
       fetchSlides();
       setDeleteModal({ isOpen: false, id: null });
       showToast(rtl ? 'تم حذف الشريحة بنجاح' : 'Slide deleted successfully');
-    } catch (err) {
+    } catch {
       showToast('Error deleting slide', 'error');
     }
   };
 
-  const openEdit = (slide: any) => {
+  const openEdit = (slide: Slide) => {
     setFormData(slide);
+    setTemplateKey('');
     setShowForm(true);
+  };
+
+  const applyTemplate = (key: string) => {
+    setTemplateKey(key);
+    const template = SLIDER_TEMPLATES.find(t => t.key === key);
+    if (!template) return;
+    setFormData(prev => ({
+      ...prev,
+      title_ar: template.title_ar,
+      title_en: template.title_en,
+      subtitle_ar: template.subtitle_ar,
+      subtitle_en: template.subtitle_en,
+      btn_text_ar: template.btn_text_ar,
+      btn_text_en: template.btn_text_en,
+      btn_link: template.btn_link
+    }));
+    showToast(rtl ? 'تم تطبيق القالب، أضف الصورة فقط' : 'Template applied, just add image');
   };
 
   const saveInterval = async () => {
@@ -104,7 +141,7 @@ export default function SliderManager() {
     try {
       await api.post('/settings', { sliderInterval: interval });
       showToast(rtl ? 'تم حفظ التوقيت بنجاح' : 'Interval saved successfully');
-    } catch(err) {
+    } catch {
       showToast('Error saving interval', 'error');
     } finally {
       setSaving(false);
@@ -131,7 +168,8 @@ export default function SliderManager() {
           {!showForm && (
             <button 
               onClick={() => {
-                setFormData({ id: '', image_url: '', title_ar: '', title_en: '', subtitle_ar: '', subtitle_en: '', btn_text_ar: '', btn_text_en: '', btn_link: '/products', order_index: slides.length });
+                setFormData({ id: '', image_url: '', title_ar: '', title_en: '', subtitle_ar: '', subtitle_en: '', btn_text_ar: '', btn_text_en: '', btn_link: '/products', order_index: slides.length, page_id: '' });
+                setTemplateKey('');
                 setShowForm(true);
               }} 
               className="btn-primary flex items-center gap-2 whitespace-nowrap"
@@ -153,6 +191,18 @@ export default function SliderManager() {
           <div className="grid md:grid-cols-2 gap-8">
              {/* Text Data */}
              <div className="space-y-4">
+                <div>
+                  <label className="block text-sm font-medium mb-1">{rtl ? 'قالب السلايدر الجاهز' : 'Slider Template'}</label>
+                  <PremiumDropdown
+                    value={templateKey}
+                    rtl={rtl}
+                    onChange={applyTemplate}
+                    options={[
+                      { value: '', labelAr: 'بدون قالب', labelEn: 'No Template' },
+                      ...SLIDER_TEMPLATES.map(t => ({ value: t.key, labelAr: t.nameAr, labelEn: t.nameEn }))
+                    ]}
+                  />
+                </div>
                 <div className="grid grid-cols-2 gap-4">
                   <div>
                     <label className="block text-sm font-medium mb-1">{rtl ? 'العنوان (عربي)' : 'Title (Arabic)'}</label>
@@ -189,16 +239,29 @@ export default function SliderManager() {
                       <input type="text" value={formData.btn_link} onChange={e => setFormData({...formData, btn_link: e.target.value})} className="w-full bg-slate-100 dark:bg-[#111] border border-white/10 rounded-xl p-3 focus:border-primary-500 outline-none" dir="ltr" />
                    </div>
                 </div>
+
+                <div className="pt-4">
+                    <label className="block text-sm font-medium mb-2">{rtl ? 'الصفحة المستهدفة' : 'Target Page'}</label>
+                    <PremiumDropdown 
+                      value={formData.page_id || ''}
+                      rtl={rtl}
+                      onChange={(val: string) => setFormData({...formData, page_id: val})}
+                      options={[
+                        { value: '', labelAr: 'الصفحة الرئيسية', labelEn: 'Home Page' },
+                        ...pages.map(p => ({ value: p.id, labelAr: p.name_ar, labelEn: p.name_en }))
+                      ]}
+                    />
+                 </div>
              </div>
 
              {/* Image Upload */}
              <div className="flex flex-col items-center justify-center border-2 border-dashed border-white/10 rounded-3xl p-6 bg-slate-50 dark:bg-white/5">
                 {formData.image_url ? (
                   <div className="relative group w-full aspect-video rounded-2xl overflow-hidden">
-                    <img src={formData.image_url.startsWith('/') ? 'http://localhost:5000' + formData.image_url : formData.image_url} className="w-full h-full object-cover" alt="" />
+                    <img src={resolveAssetUrl(formData.image_url)} className="w-full h-full object-cover" alt="" />
                     <label className="absolute inset-0 bg-black/60 opacity-0 group-hover:opacity-100 transition-opacity flex items-center justify-center cursor-pointer">
                       <ImageIcon className="text-white" size={40} />
-                      <input type="file" onChange={handleImageUpload} className="hidden" accept="image/*" />
+                      <input type="file" onChange={handleImageUpload} className="hidden" accept=".png,.jpg,.jpeg,.gif,.webp,image/png,image/jpeg,image/gif,image/webp" />
                     </label>
                   </div>
                 ) : (
@@ -207,7 +270,7 @@ export default function SliderManager() {
                       <ImageIcon size={32} />
                     </div>
                     <span className="font-semibold text-slate-500">{rtl ? 'اضغط لرفع صورة الشريحة' : 'Upload Slide Image'}</span>
-                    <input type="file" onChange={handleImageUpload} className="hidden" accept="image/*" />
+                    <input type="file" onChange={handleImageUpload} className="hidden" accept=".png,.jpg,.jpeg,.gif,.webp,image/png,image/jpeg,image/gif,image/webp" />
                   </label>
                 )}
                 <p className="mt-4 text-xs text-slate-500 text-center">{rtl ? 'يفضل مقاس كبير (1920x1080) بجودة عالية' : 'Recommended size: 1920x1080 high quality'}</p>
@@ -235,13 +298,25 @@ export default function SliderManager() {
              slides.map((slide, idx) => (
                <div key={slide.id} className="glass-card overflow-hidden flex flex-col md:flex-row gap-6 p-4 group hover:border-primary-500/30 transition-all duration-300">
                   <div className="w-full md:w-64 aspect-video rounded-xl overflow-hidden relative">
-                     <img src={slide.image_url.startsWith('/') ? 'http://localhost:5000' + slide.image_url : slide.image_url} className="w-full h-full object-cover" alt="" />
+                     <img src={resolveAssetUrl(slide.image_url)} className="w-full h-full object-cover" alt="" />
                      <div className="absolute top-2 left-2 bg-primary-500 text-white w-8 h-8 rounded-full flex items-center justify-center font-bold text-sm">
                         {idx + 1}
                      </div>
                   </div>
                   <div className="flex-1 flex flex-col justify-center gap-1">
-                     <h3 className="text-xl font-bold">{rtl ? slide.title_ar : slide.title_en}</h3>
+                     <div className="flex items-center gap-2">
+                        <h3 className="text-xl font-bold">{rtl ? slide.title_ar : slide.title_en}</h3>
+                        {slide.page_id && (
+                          <span className="px-2 py-0.5 rounded-md bg-primary-500/10 text-primary-500 text-[10px] font-black uppercase tracking-widest border border-primary-500/20">
+                            {rtl ? pages.find(p => p.id === slide.page_id)?.name_ar : pages.find(p => p.id === slide.page_id)?.name_en}
+                          </span>
+                        )}
+                        {!slide.page_id && (
+                          <span className="px-2 py-0.5 rounded-md bg-slate-500/10 text-slate-500 text-[10px] font-black uppercase tracking-widest border border-slate-500/20">
+                            {rtl ? 'الرئيسية' : 'Home'}
+                          </span>
+                        )}
+                     </div>
                      <p className="text-slate-500 line-clamp-2 text-sm">{rtl ? slide.subtitle_ar : slide.subtitle_en}</p>
                   </div>
                   <div className="flex items-center gap-2">

@@ -13,16 +13,19 @@ import {
 } from 'lucide-react';
 import { motion, AnimatePresence } from 'framer-motion';
 import toast from 'react-hot-toast';
+import { ADMIN_TABS } from './components/adminTabs';
 
-const AVAILABLE_PAGES = [
-  { id: 'dashboard', name: 'لوحة القيادة', icon: 'LayoutDashboard' },
-  { id: 'products', name: 'المنتجات', icon: 'Package' },
-  { id: 'categories', name: 'الأقسام', icon: 'Layers' },
-  { id: 'orders', name: 'الطلبات', icon: 'ShoppingBag' },
-  { id: 'slides', name: 'السلايدر', icon: 'Image' },
-  { id: 'coupons', name: 'الكوبونات', icon: 'Ticket' },
-  { id: 'settings', name: 'الإعدادات', icon: 'Settings' },
-];
+interface ManagedAdmin {
+  id: string;
+  username: string;
+  is_super_admin: boolean;
+  permissions?: string[];
+}
+
+const AVAILABLE_PAGES = ADMIN_TABS.map((tab) => ({
+  id: tab.id,
+  name: tab.labelAr
+}));
 
 export default function UserManagement() {
   const { user, admins, fetchAdmins, addAdmin, updateAdmin, deleteAdmin } = useStore();
@@ -37,7 +40,7 @@ export default function UserManagement() {
 
   useEffect(() => {
     fetchAdmins();
-  }, []);
+  }, [fetchAdmins]);
 
   if (!user?.is_super_admin) {
     return (
@@ -58,7 +61,7 @@ export default function UserManagement() {
     setIsModalOpen(true);
   };
 
-  const handleOpenEdit = (admin: any) => {
+  const handleOpenEdit = (admin: ManagedAdmin) => {
     setIsEditMode(true);
     setEditingId(admin.id);
     setUsername(admin.username);
@@ -78,7 +81,7 @@ export default function UserManagement() {
     let success = false;
 
     if (isEditMode && editingId) {
-      const data: any = { username, permissions: selectedPermissions };
+      const data: { username: string; permissions: string[]; password?: string } = { username, permissions: selectedPermissions };
       if (password) data.password = password; // Only update if provided
       success = await updateAdmin(editingId, data);
     } else {
@@ -190,7 +193,7 @@ export default function UserManagement() {
       {/* Add/Edit User Modal */}
       <AnimatePresence>
         {isModalOpen && (
-          <div className="fixed inset-0 z-[100] flex items-center justify-center p-4">
+          <div className="fixed inset-0 z-[100] flex items-start justify-center pt-28 md:pt-32 pb-6 px-4 overflow-y-auto">
             <motion.div 
               initial={{ opacity: 0 }}
               animate={{ opacity: 1 }}
@@ -203,86 +206,90 @@ export default function UserManagement() {
               initial={{ opacity: 0, scale: 0.95, y: 20 }}
               animate={{ opacity: 1, scale: 1, y: 0 }}
               exit={{ opacity: 0, scale: 0.95, y: 20 }}
-              className="w-full max-w-2xl glass-card border border-white/10 p-8 shadow-2xl relative z-110 overflow-hidden"
+              className="w-full max-w-xl glass-card border border-white/10 rounded-2xl p-3.5 md:p-4 shadow-2xl relative z-110 overflow-hidden"
             >
-              <div className="flex items-center justify-between mb-8">
-                <h2 className="text-2xl font-black text-white flex items-center gap-3">
-                  {isEditMode ? <LucidePencil className="text-primary-500" size={28} /> : <LucideUserCheck className="text-primary-500" size={28} />}
+              <div className="max-h-[calc(100vh-11.5rem)] overflow-y-auto custom-scrollbar pr-1.5 [direction:ltr]">
+              <div dir="rtl" className="text-sm">
+              <div className="flex items-center justify-between mb-4">
+                <h2 className="text-lg font-black text-white flex items-center gap-2">
+                  {isEditMode ? <LucidePencil className="text-primary-500" size={20} /> : <LucideUserCheck className="text-primary-500" size={20} />}
                   <span>{isEditMode ? `تعديل المستخدم: ${username}` : 'إضافة مسؤول جديد'}</span>
                 </h2>
-                <button onClick={() => setIsModalOpen(false)} className="p-2 text-slate-400 hover:text-white hover:bg-white/5 rounded-xl transition-all">
-                  <LucideX size={24} />
+                <button onClick={() => setIsModalOpen(false)} className="p-1.5 text-slate-400 hover:text-white hover:bg-white/5 rounded-xl transition-all">
+                  <LucideX size={18} />
                 </button>
               </div>
 
-              <form onSubmit={handleSaveUser} className="space-y-8">
-                <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+              <form onSubmit={handleSaveUser} className="space-y-4">
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
                   <div className="space-y-2">
-                    <label className="text-sm font-bold text-slate-400 mr-1 block">اسم المستخدم</label>
+                    <label className="text-xs font-bold text-slate-400 mr-1 block">اسم المستخدم</label>
                     <input 
                       type="text" 
                       value={username}
                       onChange={(e) => setUsername(e.target.value)}
-                      className="w-full h-12 bg-white/5 border border-white/10 rounded-xl px-4 text-white outline-none focus:border-primary-500/50 transition-all"
+                      className="w-full h-9 bg-white/5 border border-white/10 rounded-lg px-3 text-xs text-white outline-none focus:border-primary-500/50 transition-all"
                       placeholder="admin_new"
                       required
                     />
                   </div>
                   <div className="space-y-2">
-                    <label className="text-sm font-bold text-slate-400 mr-1 block">كلمة المرور {isEditMode && '(اتركها فارغة لعدم التغيير)'}</label>
+                    <label className="text-xs font-bold text-slate-400 mr-1 block">كلمة المرور {isEditMode && '(اتركها فارغة لعدم التغيير)'}</label>
                     <input 
                       type="password" 
                       value={password}
                       onChange={(e) => setPassword(e.target.value)}
-                      className="w-full h-12 bg-white/5 border border-white/10 rounded-xl px-4 text-white outline-none focus:border-primary-500/50 transition-all"
+                      className="w-full h-9 bg-white/5 border border-white/10 rounded-lg px-3 text-xs text-white outline-none focus:border-primary-500/50 transition-all"
                       placeholder="••••••••"
                       required={!isEditMode}
                     />
                   </div>
                 </div>
 
-                <div className="space-y-4">
-                  <label className="text-sm font-bold text-slate-400 mr-1 block uppercase tracking-widest">تحديد صلاحيات الوصول إلى الصفحات:</label>
-                  <div className="grid grid-cols-2 lg:grid-cols-3 gap-3">
+                <div className="space-y-2.5">
+                  <label className="text-xs font-bold text-slate-400 mr-1 block uppercase tracking-widest">تحديد صلاحيات الوصول إلى الصفحات:</label>
+                  <div className="grid grid-cols-2 lg:grid-cols-3 gap-2">
                     {AVAILABLE_PAGES.map((page) => (
                       <button
                         key={page.id}
                         type="button"
                         onClick={() => togglePermission(page.id)}
-                        className={`p-4 rounded-2xl border transition-all text-right flex items-center justify-between group ${
+                        className={`p-2.5 rounded-lg border transition-all text-right flex items-center justify-between group ${
                           selectedPermissions.includes(page.id) 
                             ? 'bg-primary-500/20 border-primary-500/50 text-white' 
                             : 'bg-white/5 border-white/5 text-slate-400 hover:border-white/20'
                         }`}
                       >
-                        <span className="font-bold">{page.name}</span>
+                        <span className="text-xs font-medium">{page.name}</span>
                         {selectedPermissions.includes(page.id) ? (
-                          <LucideCheck size={18} className="text-primary-500" />
+                          <LucideCheck size={14} className="text-primary-500" />
                         ) : (
-                          <div className="w-4 h-4 rounded-full border-2 border-slate-600 group-hover:border-slate-400" />
+                          <div className="w-3.5 h-3.5 rounded-full border-2 border-slate-600 group-hover:border-slate-400" />
                         )}
                       </button>
                     ))}
                   </div>
                 </div>
 
-                <div className="flex justify-end gap-4 pt-4">
+                <div className="flex justify-end gap-3 pt-2">
                   <button 
                     type="button"
                     onClick={() => setIsModalOpen(false)}
-                    className="px-8 h-12 border border-white/5 hover:bg-white/5 text-slate-300 font-bold rounded-xl transition-all"
+                    className="px-5 h-9 border border-white/5 hover:bg-white/5 text-slate-300 text-xs font-bold rounded-lg transition-all"
                   >
                     إلغاء
                   </button>
                   <button 
                     type="submit"
                     disabled={isLoading}
-                    className="px-12 h-12 bg-primary-500 hover:bg-primary-600 text-white font-bold rounded-xl flex items-center gap-2 shadow-lg shadow-primary-500/20 transition-all disabled:opacity-50"
+                    className="px-6 h-9 bg-primary-500 hover:bg-primary-600 text-white text-xs font-bold rounded-lg flex items-center gap-2 shadow-lg shadow-primary-500/20 transition-all disabled:opacity-50"
                   >
-                    {isLoading ? <div className="w-5 h-5 border-2 border-white/30 border-t-white rounded-full animate-spin" /> : (isEditMode ? 'تحديث البيانات' : 'إضافة المستخدم')}
+                    {isLoading ? <div className="w-4 h-4 border-2 border-white/30 border-t-white rounded-full animate-spin" /> : (isEditMode ? 'تحديث البيانات' : 'إضافة المستخدم')}
                   </button>
                 </div>
               </form>
+              </div>
+              </div>
             </motion.div>
           </div>
         )}

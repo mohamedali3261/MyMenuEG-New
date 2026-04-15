@@ -27,7 +27,7 @@ export default function MarketingPanel() {
     try {
       await api.post('/settings', form);
       showToast(rtl ? 'تم حفظ إعدادات التسويق' : 'Marketing settings saved');
-    } catch (err) {
+    } catch {
       showToast('Error saving settings', 'error');
     } finally {
       setLoading(false);

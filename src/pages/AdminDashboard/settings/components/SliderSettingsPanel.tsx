@@ -23,7 +23,7 @@ export default function SliderSettingsPanel() {
     try {
       await api.post('/settings', { sliderInterval: interval });
       showToast(rtl ? 'تم حفظ إعدادات السلايدر' : 'Slider settings saved successfully');
-    } catch (err) {
+    } catch {
       showToast('Error saving settings', 'error');
     } finally {
       setLoading(false);

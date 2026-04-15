@@ -7,7 +7,7 @@ import { Link } from 'react-router-dom';
 
 export default function CategoryExplorer() {
   const { rtl } = useStore();
-  const [categories, setCategories] = useState<any[]>([]);
+  const [categories, setCategories] = useState<Array<{ id: string; name_ar: string; name_en: string }>>([]);
 
   useEffect(() => {
     api.get('/categories')

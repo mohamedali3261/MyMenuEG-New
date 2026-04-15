@@ -3,10 +3,18 @@ import { X, Heart, ShoppingCart, Trash2, ArrowRight, Package } from 'lucide-reac
 import { useStore } from '../store/store';
 import { Link } from 'react-router-dom';
 
+interface WishlistProduct {
+  id: string;
+  name_ar: string;
+  name_en: string;
+  price: number;
+  image_url?: string;
+}
+
 export default function FavoritesDrawer({ isOpen, onClose }: { isOpen: boolean; onClose: () => void }) {
   const { wishlist, toggleWishlist, addToCart, rtl, showToast, branding } = useStore();
 
-  const handleAddToCart = (product: any) => {
+  const handleAddToCart = (product: WishlistProduct) => {
     addToCart({
       id: product.id,
       name: rtl ? product.name_ar : product.name_en,
@@ -27,7 +35,7 @@ export default function FavoritesDrawer({ isOpen, onClose }: { isOpen: boolean; 
             animate={{ opacity: 1 }}
             exit={{ opacity: 0 }}
             onClick={onClose}
-            className="fixed inset-0 bg-black/40 backdrop-blur-sm z-[100]"
+            className="fixed inset-0 bg-black/40 backdrop-blur-[2px] z-[100]"
           />
 
           {/* Drawer Content */}
@@ -35,8 +43,9 @@ export default function FavoritesDrawer({ isOpen, onClose }: { isOpen: boolean; 
             initial={{ x: rtl ? '-100%' : '100%' }}
             animate={{ x: 0 }}
             exit={{ x: rtl ? '-100%' : '100%' }}
-            transition={{ type: 'spring', damping: 25, stiffness: 200 }}
-            className={`fixed top-0 bottom-0 w-full max-w-md bg-white/90 dark:bg-[#0a0a0a]/90 backdrop-blur-2xl z-[101] shadow-2xl flex flex-col ${
+            transition={{ type: 'spring', damping: 30, stiffness: 350, mass: 0.8 }}
+            style={{ willChange: 'transform' }}
+            className={`fixed top-0 bottom-0 w-full max-w-md bg-white/90 dark:bg-[#0a0a0a]/90 backdrop-blur-xl z-[101] shadow-2xl flex flex-col ${
               rtl ? 'left-0 border-r' : 'right-0 border-l'
             } border-white/10`}
           >
@@ -89,7 +98,6 @@ export default function FavoritesDrawer({ isOpen, onClose }: { isOpen: boolean; 
                     {wishlist.map((item) => (
                       <motion.div
                         key={item.id}
-                        layout
                         initial={{ opacity: 0, scale: 0.9, y: 20 }}
                         animate={{ opacity: 1, scale: 1, y: 0 }}
                         exit={{ opacity: 0, scale: 0.9, x: 50 }}
@@ -97,7 +105,7 @@ export default function FavoritesDrawer({ isOpen, onClose }: { isOpen: boolean; 
                       >
                         <div className="w-20 h-20 rounded-xl bg-slate-50 dark:bg-black/20 overflow-hidden flex-shrink-0">
                           {item.image_url ? (
-                            <img src={'http://localhost:5000' + item.image_url} alt="" className="w-full h-full object-cover group-hover:scale-110 transition-transform duration-500" />
+                            <img src={'' + item.image_url} alt={rtl ? item.name_ar : item.name_en} className="w-full h-full object-cover group-hover:scale-110 transition-transform duration-500" />
                           ) : (
                             <div className="w-full h-full flex items-center justify-center text-slate-300"><Package size={24} /></div>
                           )}

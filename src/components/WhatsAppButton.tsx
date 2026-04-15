@@ -1,31 +1,37 @@
 import { useEffect, useState } from 'react';
 import { useStore } from '../store/store';
-import { api } from '../api';
 import { motion, AnimatePresence } from 'framer-motion';
 import { MessageCircle, X } from 'lucide-react';
 
+interface WhatsAppSettings {
+  whatsapp_enabled?: string;
+  whatsapp_phone?: string;
+  whatsapp_message?: string;
+}
+
 export default function WhatsAppButton() {
-  const { rtl } = useStore();
-  const [data, setData] = useState<any>(null);
+  const { rtl, fetchSettings } = useStore();
+  const [data, setData] = useState<WhatsAppSettings | null>(null);
   const [showTooltip, setShowTooltip] = useState(true);
 
   useEffect(() => {
-    api.get('/settings')
-      .then(res => {
-        if (res.data.whatsapp_enabled === 'true') {
-          setData(res.data);
+    fetchSettings()
+      .then(settings => {
+        if (settings && settings.whatsapp_enabled === 'true') {
+          setData(settings as WhatsAppSettings);
         }
       })
       .catch(console.error);
     
     const timer = setTimeout(() => setShowTooltip(false), 8000);
     return () => clearTimeout(timer);
-  }, []);
+  }, [fetchSettings]);
 
   if (!data || !data.whatsapp_phone) return null;
+  const whatsappPhone = data.whatsapp_phone;
 
   const handleOpen = () => {
-    const url = `https://wa.me/${data.whatsapp_phone.replace(/\+/g, '')}?text=${encodeURIComponent(data.whatsapp_message || '')}`;
+    const url = `https://wa.me/${whatsappPhone.replace(/\+/g, '')}?text=${encodeURIComponent(data.whatsapp_message || '')}`;
     window.open(url, '_blank');
   };
 

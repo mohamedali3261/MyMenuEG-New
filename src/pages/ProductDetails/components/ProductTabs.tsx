@@ -5,7 +5,7 @@ import { FileText, Settings, Truck, Shield } from 'lucide-react';
 
 interface ProductTabsProps {
   description: string;
-  specs: any[];
+  specs: Array<{ key?: string; value?: string }>;
   shipping: string;
   warranty: string;
 }

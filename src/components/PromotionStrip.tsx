@@ -1,23 +1,22 @@
 import { useEffect, useState } from 'react';
 import { useStore } from '../store/store';
-import { api } from '../api';
 import { motion, AnimatePresence } from 'framer-motion';
 import { X, Megaphone } from 'lucide-react';
 
 export default function PromotionStrip() {
-  const { rtl } = useStore();
-  const [data, setData] = useState<any>(null);
+  const { rtl, fetchSettings } = useStore();
+  const [data, setData] = useState<Record<string, string> | null>(null);
   const [visible, setVisible] = useState(true);
 
   useEffect(() => {
-    api.get('/settings')
-      .then(res => {
-        if (res.data.promo_enabled === 'true') {
-          setData(res.data);
+    fetchSettings()
+      .then(settings => {
+        if (settings && settings.promo_enabled === 'true') {
+          setData(settings as Record<string, string>);
         }
       })
       .catch(console.error);
-  }, []);
+  }, [fetchSettings]);
 
   if (!data || !visible) return null;
 

@@ -1,15 +1,38 @@
 import { useState, useEffect } from 'react';
 import { useStore } from '../../../store/store';
 import { api } from '../../../api';
-import { Package, User, Phone, MapPin, Clock, Download, Ticket, Truck, CheckCircle, Ban, Loader2 } from 'lucide-react';
-import { motion } from 'framer-motion';
+import { Package, User, Phone, MapPin, Clock, Download, Ticket, Truck, CheckCircle, Ban, Loader2, ShoppingCart, X } from 'lucide-react';
+import { motion, AnimatePresence } from 'framer-motion';
 import { jsPDF } from 'jspdf';
 import PremiumDropdown from '../../../components/ui/PremiumDropdown';
 
+interface OrderItem {
+  product_name: string;
+  quantity: number;
+  price: number;
+  subtotal: number;
+}
+
+interface OrderRecord {
+  id: string;
+  created_at: string;
+  customer_name: string;
+  phone: string;
+  governorate?: string;
+  city?: string;
+  address?: string;
+  notes?: string;
+  total_price: number;
+  discount_amount?: number;
+  status: string;
+  items: OrderItem[];
+}
+
 export default function OrdersList() {
   const { rtl } = useStore();
-  const [orders, setOrders] = useState<any[]>([]);
+  const [orders, setOrders] = useState<OrderRecord[]>([]);
   const [loading, setLoading] = useState(true);
+  const [selectedOrderItems, setSelectedOrderItems] = useState<OrderItem[] | null>(null);
 
   const fetchOrders = async () => {
     try {
@@ -35,7 +58,7 @@ export default function OrdersList() {
     }
   };
 
-  const generatePDF = (order: any) => {
+  const generatePDF = (order: OrderRecord) => {
     const doc = new jsPDF();
     
     // Header
@@ -52,7 +75,8 @@ export default function OrdersList() {
     doc.setFontSize(10);
     doc.text(`Name: ${order.customer_name}`, 20, 80);
     doc.text(`Phone: ${order.phone}`, 20, 85);
-    doc.text(`Address: ${order.address}`, 20, 90);
+    const fullAddress = [order.governorate, order.city, order.address].filter(Boolean).join(', ');
+    doc.text(`Address: ${fullAddress}`, 20, 90);
 
     // Table Header
     doc.line(20, 105, 190, 105);
@@ -64,7 +88,7 @@ export default function OrdersList() {
 
     // Items
     let y = 122;
-    order.items.forEach((item: any) => {
+    order.items.forEach((item) => {
       doc.text(item.product_name.substring(0, 40), 20, y);
       doc.text(item.quantity.toString(), 135, y);
       doc.text(item.price.toFixed(2), 150, y);
@@ -135,23 +159,32 @@ export default function OrdersList() {
 
             {/* Customer Details */}
             <div className="md:w-1/3 flex flex-col justify-center gap-2">
-              <div className="flex items-center gap-2 text-sm font-medium"><User size={16} className="text-primary-500" /> {order.customer_name}</div>
-              <div className="flex items-center gap-2 text-sm text-slate-500"><Phone size={16} className="text-accent-500" /> {order.phone}</div>
-              <div className="flex items-center gap-2 text-sm text-slate-500"><MapPin size={16} className="text-blue-500" /> {order.address}</div>
-              {order.notes && <div className="text-xs text-slate-400 mt-2 p-2 bg-slate-100 dark:bg-[#111] rounded"><span className="font-bold">ملاحظة:</span> {order.notes}</div>}
+              <div className="flex items-center gap-2 text-sm font-medium"><User size={16} className="text-primary-500 shrink-0" /> {order.customer_name}</div>
+              <div className="flex items-center gap-2 text-sm text-slate-500"><Phone size={16} className="text-accent-500 shrink-0" /> {order.phone}</div>
+              <div className="flex items-start gap-2 text-sm text-slate-500">
+                <MapPin size={16} className="text-blue-500 shrink-0 mt-0.5" /> 
+                <span className="leading-snug">
+                   {(order.governorate || order.city) && (
+                     <span className="block font-bold text-slate-700 dark:text-slate-300 mb-1">
+                       {order.governorate} {order.city && `- ${order.city}`}
+                     </span>
+                   )}
+                   <span className="text-xs opacity-80 block">{order.address}</span>
+                </span>
+              </div>
+              {order.notes && <div className="text-xs text-slate-500 mt-2 p-2 bg-slate-100 dark:bg-white/5 border-s-2 border-primary-500 rounded"><span className="font-bold text-slate-700 dark:text-slate-300">ملاحظة:</span> {order.notes}</div>}
             </div>
 
-            {/* Items */}
-            <div className="md:w-1/4 flex flex-col justify-center gap-2">
+            {/* Items Button */}
+            <div className="md:w-1/4 flex flex-col justify-center items-center gap-2">
               <span className="text-xs text-slate-400 font-bold mb-1">{rtl ? 'المنتجات المطلوبة' : 'Requested Items'}</span>
-              <div className="max-h-24 overflow-y-auto space-y-1 pr-2">
-                {order.items?.map((item: any) => (
-                  <div key={item.id} className="text-sm font-medium flex justify-between bg-slate-50 dark:bg-white/5 p-1 px-2 rounded">
-                    <span className="truncate w-3/4">{item.product_name}</span>
-                    <span className="text-primary-500">x{item.quantity}</span>
-                  </div>
-                ))}
-              </div>
+              <button 
+                onClick={() => setSelectedOrderItems(order.items)}
+                className="flex items-center gap-2 px-4 py-2 bg-slate-100 dark:bg-white/5 border border-slate-200 dark:border-white/10 rounded-xl hover:bg-primary-500 hover:text-white transition-all text-sm font-bold text-slate-600 dark:text-slate-300 group"
+              >
+                <ShoppingCart size={18} className="text-primary-500 group-hover:text-white transition-colors" />
+                <span>{rtl ? `عرض المنتجات (${order.items?.length || 0})` : `Show Items (${order.items?.length || 0})`}</span>
+              </button>
             </div>
 
             {/* Price & Actions */}
@@ -159,10 +192,10 @@ export default function OrdersList() {
               <div className="text-center md:text-end w-full">
                 <span className="text-xs text-slate-400 block mb-1">{rtl ? 'الإجمالي النهائي' : 'Final Total'}</span>
                 <span className="text-2xl font-extrabold text-primary-500">EGP {order.total_price?.toFixed(2)}</span>
-                {order.discount_amount > 0 && (
+                {(order.discount_amount ?? 0) > 0 && (
                   <div className="flex items-center gap-1 text-[10px] text-green-500 font-bold justify-end mt-1">
                     <Ticket size={10} />
-                    <span>{rtl ? `خصم: ${order.discount_amount} جنيه` : `Saved: ${order.discount_amount} EGP`}</span>
+                    <span>{rtl ? `خصم: ${order.discount_amount ?? 0} جنيه` : `Saved: ${order.discount_amount ?? 0} EGP`}</span>
                   </div>
                 )}
               </div>
@@ -195,6 +228,48 @@ export default function OrdersList() {
           </div>
         )}
       </div>
+
+      {/* Items Modal */}
+      <AnimatePresence>
+        {selectedOrderItems && (
+          <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/50 backdrop-blur-sm" onClick={() => setSelectedOrderItems(null)}>
+            <motion.div 
+              initial={{ opacity: 0, scale: 0.9, y: 20 }}
+              animate={{ opacity: 1, scale: 1, y: 0 }}
+              exit={{ opacity: 0, scale: 0.9, y: 20 }}
+              className="bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 p-6 w-full max-w-lg rounded-2xl shadow-xl relative" 
+              onClick={e => e.stopPropagation()}
+            >
+              <button 
+                onClick={() => setSelectedOrderItems(null)}
+                className="absolute top-4 right-4 rtl:left-4 rtl:right-auto p-2 bg-slate-100 dark:bg-white/5 hover:bg-red-500 hover:text-white rounded-full transition-colors text-slate-500"
+              >
+                <X size={20} />
+              </button>
+              
+              <h3 className="text-xl font-bold mb-6 flex items-center gap-2 border-b border-slate-100 dark:border-white/5 pb-4">
+                <ShoppingCart size={24} className="text-primary-500" />
+                {rtl ? 'تفاصيل المنتجات' : 'Items Details'}
+              </h3>
+              
+              <div className="max-h-[60vh] overflow-y-auto space-y-3 pr-2 custom-scrollbar">
+                {selectedOrderItems.map((item, idx: number) => (
+                  <div key={idx} className="flex justify-between items-center p-3 bg-slate-50 dark:bg-white/5 rounded-xl border border-slate-100 dark:border-white/5">
+                    <div className="flex flex-col">
+                      <span className="font-bold text-slate-800 dark:text-slate-200">{item.product_name}</span>
+                      <span className="text-xs text-slate-500 mt-1">EGP {item.price?.toFixed(2)}</span>
+                    </div>
+                    <div className="flex flex-col items-end">
+                       <span className="bg-primary-500/10 text-primary-500 font-bold px-3 py-1 rounded-lg">x{item.quantity}</span>
+                       <span className="text-sm font-bold text-accent-500 mt-1">EGP {item.subtotal?.toFixed(2)}</span>
+                    </div>
+                  </div>
+                ))}
+              </div>
+            </motion.div>
+          </div>
+        )}
+      </AnimatePresence>
     </div>
   );
 }

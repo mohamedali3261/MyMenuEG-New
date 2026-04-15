@@ -1,10 +1,23 @@
 import { useEffect } from 'react';
 import { useStore } from '../../store/store';
 import MainSlider from './components/MainSlider';
+import BrandIdentitySection from './components/BrandIdentitySection';
 import HomeFeatures from './components/HomeFeatures';
 import HomeStats from './components/HomeStats';
 import CategorySection from './components/CategorySection';
 import { motion } from 'framer-motion';
+
+interface HomeCategory {
+  id: string;
+  name_ar: string;
+  name_en: string;
+}
+
+interface HomeProduct {
+  id: string;
+  category_id: string;
+  status?: string;
+}
 
 export default function Home() {
   const { products, categories, isDataLoaded, rtl, branding } = useStore();
@@ -29,10 +42,12 @@ export default function Home() {
     <div className="w-full flex flex-col pb-24 overflow-hidden">
       <MainSlider />
       
+      <BrandIdentitySection />
+      
       {/* Dynamic Category Sections */}
       <div className="mt-12 space-y-10">
-        {categories.map((cat: any, idx: number) => {
-          const catProducts = products.filter((p: any) => p.category_id === cat.id && p.status?.toLowerCase() === 'active');
+        {categories.map((cat: HomeCategory, idx: number) => {
+          const catProducts = products.filter((p: HomeProduct) => p.category_id === cat.id && p.status?.toLowerCase() === 'active');
           if (catProducts.length === 0) return null;
           
           return (

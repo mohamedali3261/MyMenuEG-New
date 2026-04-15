@@ -1,7 +1,18 @@
 import { useStore } from '../store/store';
 import { ClassicElegantCard, Floating3DCard, MinimalPosterCard } from '../pages/Home/components/ProductCardVariants';
 
-export default function ProductCard({ product }: { product: any }) {
+interface ProductCardData {
+  id: string;
+  name_ar: string;
+  name_en: string;
+  description_ar: string;
+  description_en: string;
+  price: number;
+  image_url?: string;
+  images?: string[];
+}
+
+export default function ProductCard({ product }: { product: ProductCardData }) {
   const { cardStyle, rtl, addToCart, showToast } = useStore();
 
   const handleAdd = (e: React.MouseEvent) => {

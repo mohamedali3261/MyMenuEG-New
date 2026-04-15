@@ -1,4 +1,4 @@
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useCallback } from 'react';
 import { useStore } from '../../../store/store';
 import { Plus } from 'lucide-react';
 import { Link } from 'react-router-dom';
@@ -8,11 +8,31 @@ import { api } from '../../../api';
 import ProductsFilter from './components/ProductsFilter';
 import ProductsTable from './components/ProductsTable';
 
+interface ProductListItem {
+  id: string;
+  image_url?: string;
+  name_ar: string;
+  name_en: string;
+  cat_name_ar?: string;
+  cat_name_en?: string;
+  price: number;
+  old_price: number;
+  stock: number;
+  status?: string;
+}
+
+interface ProductsResponse {
+  products: ProductListItem[];
+  total: number;
+  pages: number;
+  currentPage: number;
+}
+
 export default function ProductsList() {
   const { rtl } = useStore();
   const [searchTerm, setSearchTerm] = useState('');
   const [selectedCategory, setSelectedCategory] = useState('all');
-  const [products, setProducts] = useState<any[]>([]);
+  const [products, setProducts] = useState<ProductListItem[]>([]);
   const [loading, setLoading] = useState(true);
   
   // Pagination State
@@ -23,7 +43,7 @@ export default function ProductsList() {
     limit: 10
   });
 
-  const fetchProducts = (page = 1) => {
+  const fetchProducts = useCallback((page = 1) => {
     setLoading(true);
     const params = new URLSearchParams({
       page: page.toString(),
@@ -33,7 +53,7 @@ export default function ProductsList() {
     });
 
     api.get(`/products?${params.toString()}`)
-      .then((res: any) => {
+      .then((res: { data: ProductListItem[] | ProductsResponse }) => {
         const data = res.data;
         if (Array.isArray(data)) {
           // Fallback for old API format
@@ -54,11 +74,11 @@ export default function ProductsList() {
       })
       .catch(console.error)
       .finally(() => setLoading(false));
-  };
+  }, [pagination.limit, searchTerm, selectedCategory]);
 
   useEffect(() => {
     fetchProducts(1);
-  }, [selectedCategory, searchTerm]);
+  }, [fetchProducts]);
 
   return (
     <div className="max-w-7xl mx-auto px-4 md:px-0">

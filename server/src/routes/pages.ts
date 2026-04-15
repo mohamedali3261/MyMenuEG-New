@@ -1,0 +1,14 @@
+import { Router } from 'express';
+import { getPages, getPageBySlug, upsertPage, deletePage, reorderPages, incrementPageView } from '../controllers/pageController';
+import { authenticateToken } from '../middleware/auth';
+
+const router = Router();
+
+router.get('/', getPages);
+router.get('/:slug', getPageBySlug);
+router.post('/', authenticateToken, upsertPage);
+router.post('/reorder', authenticateToken, reorderPages);
+router.post('/:id/view', incrementPageView);
+router.delete('/:id', authenticateToken, deletePage);
+
+export default router;

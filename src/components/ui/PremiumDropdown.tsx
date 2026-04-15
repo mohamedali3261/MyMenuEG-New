@@ -61,7 +61,12 @@ export default function PremiumDropdown({
   // Close when clicking outside
   useEffect(() => {
     const handleClick = (e: MouseEvent) => {
-      if (containerRef.current && !containerRef.current.contains(e.target as Node)) {
+      const target = e.target as HTMLElement;
+      if (
+        containerRef.current && 
+        !containerRef.current.contains(target) &&
+        !target.closest('.premium-dropdown-portal')
+      ) {
         setIsOpen(false);
       }
     };
@@ -112,7 +117,7 @@ export default function PremiumDropdown({
                width: coords.width,
                zIndex: 9999 
             }}
-            className="p-1 bg-white/95 dark:bg-[#0a0a0a]/95 backdrop-blur-2xl border border-slate-200 dark:border-white/10 rounded-2xl shadow-2xl shadow-black/40 overflow-hidden"
+            className="premium-dropdown-portal p-1 bg-white/95 dark:bg-[#0a0a0a]/95 backdrop-blur-2xl border border-slate-200 dark:border-white/10 rounded-2xl shadow-2xl shadow-black/40 overflow-hidden"
             dir={rtl ? 'rtl' : 'ltr'}
           >
             <div className="flex flex-col gap-1 max-h-[220px] overflow-y-auto scrollbar-none">

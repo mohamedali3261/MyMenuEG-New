@@ -6,7 +6,11 @@ interface ProtectedRouteProps {
 }
 
 export default function ProtectedRoute({ permission }: ProtectedRouteProps) {
-  const { user, token } = useStore();
+  const { user, token, authChecked } = useStore();
+
+  if (!authChecked) {
+    return null;
+  }
 
   if (!token || !user) {
     return <Navigate to="/admin/login" replace />;

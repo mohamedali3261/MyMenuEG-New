@@ -3,9 +3,26 @@ import { useStore } from '../../../store/store';
 import { Users, Search, Phone, MapPin, ShoppingBag, Loader2 } from 'lucide-react';
 import { api } from '../../../api';
 
+interface OrderRow {
+  customer_name: string;
+  phone: string;
+  address: string;
+  total_price: number;
+  created_at: string;
+}
+
+interface CustomerSummary {
+  name: string;
+  phone: string;
+  address: string;
+  orderCount: number;
+  totalSpent: number;
+  lastOrder: string;
+}
+
 export default function CustomersList() {
   const { rtl } = useStore();
-  const [customers, setCustomers] = useState<any[]>([]);
+  const [customers, setCustomers] = useState<CustomerSummary[]>([]);
   const [loading, setLoading] = useState(true);
   const [search, setSearch] = useState('');
 
@@ -13,10 +30,10 @@ export default function CustomersList() {
     // We can use the same orders data but group by phone to get "Customers"
     api.get('/orders')
       .then(res => {
-        const orders = res.data;
-        const customerMap: any = {};
+        const orders = res.data as OrderRow[];
+        const customerMap: Record<string, CustomerSummary> = {};
         
-        orders.forEach((o: any) => {
+        orders.forEach((o) => {
           if (!customerMap[o.phone]) {
             customerMap[o.phone] = {
               name: o.customer_name,

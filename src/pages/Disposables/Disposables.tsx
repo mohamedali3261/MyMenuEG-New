@@ -11,7 +11,7 @@ import {
   Sparkles, ChevronRight
 } from 'lucide-react';
 
-const CATEGORY_MAP: Record<string, any> = {
+const CATEGORY_MAP: Record<string, { icon: React.ReactNode; color: string }> = {
   'cat-can-plastic': { icon: <Container size={24} />, color: 'from-blue-500 to-indigo-600' },
   'cat-can-plastic-cups': { icon: <CupSoda size={24} />, color: 'from-cyan-500 to-blue-600' },
   'cat-general-cups': { icon: <GlassWater size={24} />, color: 'from-teal-500 to-emerald-600' },

@@ -33,11 +33,11 @@ export default function HomeFeatures() {
       <div className="text-center mb-16 space-y-4">
          <motion.span 
            initial={{ opacity: 0 }} whileInView={{ opacity: 1 }}
-           className="text-primary-500 font-bold uppercase tracking-widest text-sm"
+           className="text-slate-600 dark:text-slate-300 font-bold uppercase tracking-widest text-sm"
          >
            {rtl ? 'لماذا تختارنا؟' : 'Why Choose Us?'}
          </motion.span>
-         <h2 className="text-4xl font-extrabold">{rtl ? 'نحن شركاؤك في النجاح' : 'Your Partners In Success'}</h2>
+         <h2 className="text-4xl font-extrabold text-slate-900 dark:text-white">{rtl ? 'نحن شركاؤك في النجاح' : 'Your Partners In Success'}</h2>
       </div>
 
       <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-8">
@@ -48,12 +48,12 @@ export default function HomeFeatures() {
             whileInView={{ opacity: 1, y: 0 }}
             viewport={{ once: true }}
             transition={{ delay: i * 0.1 }}
-            className="glass-card group p-8 hover:border-primary-500/40 hover:bg-primary-500/5 transition-all duration-300"
+            className="glass-card group p-8 hover:border-primary-500/40 hover:bg-primary-500/5 hover:shadow-[0_10px_26px_-18px_rgba(0,0,0,0.18)] hover:translate-y-0 transition-all duration-300"
           >
              <div className="w-14 h-14 rounded-2xl bg-primary-500/10 text-primary-500 flex items-center justify-center mb-6 group-hover:scale-110 group-hover:bg-primary-500 group-hover:text-white transition-all duration-300">
-               <f.icon size={28} />
+               <f.icon size={28} className="text-primary-500 group-hover:text-white transition-colors duration-300" />
              </div>
-             <h3 className="text-xl font-bold mb-3">{rtl ? f.label_ar : f.label_en}</h3>
+             <h3 className="text-xl font-bold mb-3 text-slate-900 dark:text-white">{rtl ? f.label_ar : f.label_en}</h3>
              <p className="text-slate-500 text-sm leading-relaxed">{rtl ? f.desc_ar : f.desc_en}</p>
           </motion.div>
         ))}

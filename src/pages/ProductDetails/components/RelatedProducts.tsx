@@ -8,9 +8,19 @@ interface RelatedProps {
   currentId?: string;
 }
 
+type RelatedProduct = {
+  id: string;
+  name_ar: string;
+  name_en: string;
+  description_ar: string;
+  description_en: string;
+  price: number;
+  category_id?: string;
+};
+
 export default function RelatedProducts({ categoryId, currentId }: RelatedProps) {
   const { rtl } = useStore();
-  const [products, setProducts] = useState<any[]>([]);
+  const [products, setProducts] = useState<RelatedProduct[]>([]);
   const [loading, setLoading] = useState(true);
 
   useEffect(() => {
@@ -20,7 +30,7 @@ export default function RelatedProducts({ categoryId, currentId }: RelatedProps)
       .then(res => {
         // Correctly handle paginated response: { products: [...], total, ... }
         const rawProds = res.data.products || [];
-        const related = rawProds.filter((p: any) => 
+        const related = (rawProds as RelatedProduct[]).filter((p) =>
           p.category_id === categoryId && p.id !== currentId
         ).slice(0, 4);
         setProducts(related);

@@ -5,9 +5,11 @@ import { Search, Package, CheckCircle2, Clock, Truck, ShieldAlert, ChevronRight 
 import { motion, AnimatePresence } from 'framer-motion';
 
 export default function OrderTracking() {
-  const { rtl } = useStore();
+  const { rtl, addTrackedOrder } = useStore();
+  type TrackedOrder = { id: string; status: string; total_price: number; created_at: string };
   const [orderId, setOrderId] = useState('');
-  const [order, setOrder] = useState<any>(null);
+  const [phone, setPhone] = useState('');
+  const [order, setOrder] = useState<TrackedOrder | null>(null);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState('');
 
@@ -20,7 +22,8 @@ export default function OrderTracking() {
     try {
       const res = await api.get(`/orders/track/${orderId.trim()}`);
       setOrder(res.data);
-    } catch (err: any) {
+      addTrackedOrder(orderId.trim(), phone.trim());
+    } catch {
       setError(rtl ? 'عذراً، لم نجد طلباً بهذا الرقم.' : 'Sorry, we couldn\'t find an order with this ID.');
     } finally {
       setLoading(false);
@@ -60,6 +63,16 @@ export default function OrderTracking() {
             type="text" 
             placeholder={rtl ? 'أدخل رقم الطلب (مثال: ORD-XXXX)' : 'Enter Order ID (e.g. ORD-XXXX)'}
             className="w-full bg-slate-100 dark:bg-white/5 border border-white/10 rounded-2xl py-4 pl-12 pr-6 outline-none focus:ring-2 focus:ring-primary-500 transition-all font-mono"
+            dir="ltr"
+          />
+        </div>
+        <div className="relative flex-grow">
+          <input
+            value={phone}
+            onChange={e => setPhone(e.target.value)}
+            type="tel"
+            placeholder={rtl ? 'رقم الهاتف (اختياري)' : 'Phone number (optional)'}
+            className="w-full bg-slate-100 dark:bg-white/5 border border-white/10 rounded-2xl py-4 px-4 outline-none focus:ring-2 focus:ring-primary-500 transition-all"
             dir="ltr"
           />
         </div>

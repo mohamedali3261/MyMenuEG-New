@@ -11,10 +11,16 @@ interface ProductsFilterProps {
   setSelectedCategory: (val: string) => void;
 }
 
+interface FilterCategory {
+  id: string;
+  name_ar: string;
+  name_en: string;
+}
+
 export default function ProductsFilter({ 
   rtl, searchTerm, setSearchTerm, selectedCategory, setSelectedCategory 
 }: ProductsFilterProps) {
-  const [categories, setCategories] = useState<any[]>([]);
+  const [categories, setCategories] = useState<FilterCategory[]>([]);
 
   useEffect(() => {
     api.get('/categories').then(res => setCategories(res.data)).catch(console.error);

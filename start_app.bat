@@ -11,6 +11,6 @@ if not exist node_modules (
     call npm install
 )
 echo.
-echo [2/2] Launching Server and Frontend...
+echo [2/2] Launching All Services (Server, Frontend, Database View)...
 npm run dev:all
 pause

@@ -3,30 +3,33 @@ import { Paintbrush, CheckCircle2, Palette, MousePointer2, ZoomIn, ArrowUpToLine
 import { motion } from 'framer-motion';
 import { api } from '../../../../api';
 
+type CardStyle = 'classic' | 'floating' | 'minimal';
+type CardHoverAnimation = 'zoom' | 'lift' | 'glow' | 'none';
+
 export default function CardStylePanel() {
   const { rtl, cardStyle, setCardStyle, cardHoverAnimation, setCardHoverAnimation, showToast } = useStore();
 
-  const styles = [
+  const styles: Array<{ id: CardStyle; name: string }> = [
     { id: 'classic', name: rtl ? 'الكارت الكلاسيكي الأنيق' : 'Classic Elegant Card' },
     { id: 'floating', name: rtl ? 'الكارت العائم المائل' : 'Floating 3D Card' },
     { id: 'minimal', name: rtl ? 'كارت الصورة الواسع' : 'Minimal Poster Card' },
   ];
 
-  const hoverAnimations = [
+  const hoverAnimations: Array<{ id: CardHoverAnimation; name: string; icon: React.ReactNode }> = [
     { id: 'zoom', name: rtl ? 'تكبير الصورة (Zoom)' : 'Zoom In', icon: <ZoomIn size={32} /> },
     { id: 'lift', name: rtl ? 'رفع للأعلى (Lift)' : 'Lift Up', icon: <ArrowUpToLine size={32} /> },
     { id: 'glow', name: rtl ? 'توهج (Glow)' : 'Glow', icon: <Sun size={32} /> },
     { id: 'none', name: rtl ? 'بدون (None)' : 'None', icon: <Ban size={32} /> },
   ];
 
-  const handleStyleChange = (id: string) => {
-    setCardStyle(id as any);
+  const handleStyleChange = (id: CardStyle) => {
+    setCardStyle(id);
     api.post('/settings', { cardStyle: id });
     showToast(rtl ? 'تم تغيير شكل الكارت' : 'Card style updated', 'success');
   };
 
-  const handleAnimChange = (id: string) => {
-    setCardHoverAnimation(id as any);
+  const handleAnimChange = (id: CardHoverAnimation) => {
+    setCardHoverAnimation(id);
     api.post('/settings', { cardHoverAnimation: id });
     showToast(rtl ? 'تم تغيير تأثير الحركة' : 'Animation updated', 'success');
   };

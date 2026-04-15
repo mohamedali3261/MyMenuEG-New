@@ -1,6 +1,7 @@
 import { useState, useRef, useEffect } from 'react';
 import { motion, AnimatePresence, useMotionValue, useSpring, useMotionTemplate } from 'framer-motion';
 import { ShoppingBag, ChevronLeft, ChevronRight } from 'lucide-react';
+import { resolveAssetUrl } from '../../../utils/assetUrl';
 
 export default function ProductGallery({ images }: { images: string[] }) {
   const [active, setActive] = useState(0);
@@ -83,7 +84,7 @@ export default function ProductGallery({ images }: { images: string[] }) {
         <AnimatePresence mode="wait">
           <motion.img
             key={active}
-            src={validImages[active].startsWith('http') ? validImages[active] : 'http://localhost:5000' + validImages[active]}
+            src={resolveAssetUrl(validImages[active])}
             alt="Product"
             initial={{ opacity: 0 }}
             animate={{ opacity: 1 }}
@@ -151,7 +152,7 @@ export default function ProductGallery({ images }: { images: string[] }) {
                   <div className="absolute inset-0 bg-primary-500/10 pointer-events-none mix-blend-overlay z-10" />
                 )}
                 <img 
-                  src={img.startsWith('http') ? img : 'http://localhost:5000' + img} 
+                  src={resolveAssetUrl(img)} 
                   alt={`Thumbnail ${i + 1}`} 
                   className="w-full h-full object-cover rounded-[14px]" 
                 />

@@ -6,10 +6,11 @@ import { useStore } from '../../../../store/store';
 import { api } from '../../../../api';
 import ConfirmModal from '../../components/ConfirmModal';
 import PremiumDropdown from '../../../../components/ui/PremiumDropdown';
+import { resolveAssetUrl } from '../../../../utils/assetUrl';
 
 interface ProductsTableProps {
   rtl: boolean;
-  products: any[];
+  products: ProductItem[];
   onRefresh: () => void;
   loading: boolean;
   pagination: {
@@ -19,6 +20,19 @@ interface ProductsTableProps {
     limit: number;
   };
   onPageChange: (page: number) => void;
+}
+
+interface ProductItem {
+  id: string;
+  image_url?: string;
+  name_ar: string;
+  name_en: string;
+  cat_name_ar?: string;
+  cat_name_en?: string;
+  price: number;
+  old_price: number;
+  stock: number;
+  status?: string;
 }
 
 export default function ProductsTable({ 
@@ -44,16 +58,19 @@ export default function ProductsTable({
 
   const statusOptions = [
     { value: 'active', labelAr: 'نشط', labelEn: 'Active', icon: <Activity size={14} />, color: 'text-emerald-500', bg: 'bg-emerald-500/10' },
-    { value: 'disabled', labelAr: 'معطل', labelEn: 'Disabled', icon: <Ban size={14} />, color: 'text-rose-500', bg: 'bg-rose-500/10' }
+    { value: 'archived', labelAr: 'معطل', labelEn: 'Disabled', icon: <Ban size={14} />, color: 'text-rose-500', bg: 'bg-rose-500/10' }
   ];
+
+  const normalizeStatus = (status?: string) => {
+    const value = status?.toLowerCase();
+    if (value === 'disabled') return 'archived';
+    if (value === 'active' || value === 'draft' || value === 'archived') return value;
+    return 'active';
+  };
 
   const handleStatusChange = async (id: string, newStatus: string) => {
      try {
-        // Fetch current product to prevent overwriting other fields accidentally if we use the full object update
-        const prodRes = await api.get(`/products/${id}`);
-        const fullProd = prodRes.data;
-        
-        await api.post('/products', { ...fullProd, status: newStatus });
+        await api.patch(`/products/${id}/status`, { status: newStatus });
         onRefresh();
         showToast(rtl ? 'تم تحديث الحالة بنجاح' : 'Status updated successfully', 'success');
      } catch(err) {
@@ -86,7 +103,7 @@ export default function ProductsTable({
                     <div className="flex items-center gap-4">
                       {product.image_url ? (
                         <div className="w-12 h-12 rounded-xl overflow-hidden ring-1 ring-white/20 shadow-lg shrink-0">
-                          <img src={'http://localhost:5000' + product.image_url} alt="" className="w-full h-full object-cover group-hover:scale-110 transition-transform duration-300" />
+                          <img src={resolveAssetUrl(product.image_url)} alt="" className="w-full h-full object-cover group-hover:scale-110 transition-transform duration-300" />
                         </div>
                       ) : (
                         <div className="w-12 h-12 rounded-xl bg-slate-100 dark:bg-white/10 flex items-center justify-center text-slate-400 shrink-0 border border-dashed border-white/20">
@@ -126,7 +143,7 @@ export default function ProductsTable({
                   </td>
                   <td className="px-6 py-5">
                     <PremiumDropdown 
-                      value={product.status?.toLowerCase()} 
+                      value={normalizeStatus(product.status)} 
                       options={statusOptions}
                       rtl={rtl} 
                       onChange={(newStatus) => handleStatusChange(product.id, newStatus)} 
@@ -161,7 +178,7 @@ export default function ProductsTable({
             <div className="flex gap-3">
               {product.image_url ? (
                 <div className="w-16 h-16 md:w-20 md:h-20 rounded-xl overflow-hidden shrink-0 shadow-md ring-1 ring-white/10">
-                  <img src={'http://localhost:5000' + product.image_url} alt="" className="w-full h-full object-cover" />
+                  <img src={resolveAssetUrl(product.image_url)} alt="" className="w-full h-full object-cover" />
                 </div>
               ) : (
                 <div className="w-16 h-16 md:w-20 md:h-20 rounded-xl bg-white/5 flex items-center justify-center text-slate-500 shrink-0 border border-dashed border-white/10">
@@ -188,7 +205,7 @@ export default function ProductsTable({
             <div className="flex items-center justify-between pt-3 border-t border-slate-200 dark:border-white/5 gap-2">
               <div className="w-[110px] shrink-0">
                 <PremiumDropdown 
-                  value={product.status?.toLowerCase()} 
+                  value={normalizeStatus(product.status)} 
                   options={statusOptions}
                   rtl={rtl} 
                   onChange={(newStatus) => handleStatusChange(product.id, newStatus)} 

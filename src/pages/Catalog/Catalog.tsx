@@ -18,8 +18,22 @@ import {
 import { ClassicElegantCard, Floating3DCard, MinimalPosterCard } from '../Home/components/ProductCardVariants';
 import PremiumDropdown from '../../components/ui/PremiumDropdown';
 
+type CatalogProduct = {
+  id: string;
+  category_id: string;
+  status?: string;
+  name_ar: string;
+  name_en: string;
+  description_ar?: string;
+  description_en?: string;
+  price: number;
+  image_url?: string;
+  images?: string[];
+  old_price?: number;
+};
+
 /* --- List View Card Component --- */
-const ListViewCard = ({ prod, rtl, onAdd }: any) => (
+const ListViewCard = ({ prod, rtl, onAdd }: { prod: CatalogProduct & { onQuickView?: () => void }, rtl: boolean, onAdd: () => void }) => (
   <motion.div 
     initial={{ opacity: 0, x: -20 }}
     animate={{ opacity: 1, x: 0 }}
@@ -32,7 +46,7 @@ const ListViewCard = ({ prod, rtl, onAdd }: any) => (
     </div>
     <Link to={`/products/${prod.id}`} className="shrink-0 w-full md:w-48 h-48 rounded-xl bg-slate-100 dark:bg-[#111] border border-slate-200 dark:border-white/10 flex items-center justify-center relative overflow-hidden group">
       {prod.image_url ? (
-        <img src={'http://localhost:5000' + prod.image_url} alt="" className="absolute inset-0 w-full h-full object-cover" />
+        <img src={'' + prod.image_url} alt="" className="absolute inset-0 w-full h-full object-cover" />
       ) : (
         <Package size={64} strokeWidth={1} className="text-slate-300 dark:text-white/20" />
       )}
@@ -121,9 +135,9 @@ export default function Catalog() {
         if (sortOrder === 'price-desc') return b.price - a.price;
         return 0; // newest relies on default DB insert order for now
       });
-  }, [products, search, maxPrice, sortOrder, inStockOnly]);
+  }, [products, search, maxPrice, sortOrder, inStockOnly, activeCategory, isDataLoaded]);
 
-  const handleAdd = (prod: any) => {
+  const handleAdd = (prod: CatalogProduct) => {
     addToCart({ id: prod.id, name: rtl ? prod.name_ar : prod.name_en, price: prod.price, quantity: 1, image: prod.image_url || (prod.images && prod.images[0]) });
     showToast(rtl ? `تمت إضافة ${prod.name_ar} للسلة` : `${prod.name_en} added to cart!`);
   }
@@ -135,7 +149,7 @@ export default function Catalog() {
   ];
 
   return (
-    <div className="min-h-screen py-24 px-6 max-w-7xl mx-auto">
+    <div className="min-h-screen py-24 px-6 max-w-7xl mx-auto bg-transparent">
       {/* HEADER */}
       <motion.div 
         initial={{ opacity: 0, y: -20 }}
@@ -145,7 +159,7 @@ export default function Catalog() {
         <span className="text-primary-500 font-bold uppercase tracking-wider mb-2 block">
           {rtl ? 'اكتشف مجموعتنا' : 'Discover Our Collection'}
         </span>
-        <h1 className="text-4xl md:text-5xl font-extrabold mb-6">
+        <h1 className="text-4xl md:text-5xl font-extrabold mb-6 text-primary-600 dark:text-primary-400">
           {rtl ? 'جميع المنتجات' : 'All Products'}
         </h1>
 
@@ -179,7 +193,7 @@ export default function Catalog() {
           className="w-full lg:w-1/4 shrink-0"
         >
           <div className="glass-card p-6 sticky top-24">
-            <h3 className="text-lg font-bold mb-6 flex items-center gap-2 border-b border-slate-200 dark:border-white/10 pb-4">
+            <h3 className="text-lg font-bold mb-6 flex items-center gap-2 border-b border-slate-200 dark:border-white/10 pb-4 text-slate-900 dark:text-white">
               <SlidersHorizontal size={20} />
               {rtl ? 'تصفية النتائج' : 'Filters'}
             </h3>
@@ -232,7 +246,7 @@ export default function Catalog() {
                 value={sortOrder}
                 options={sortOptions}
                 rtl={rtl}
-                onChange={(v) => setSortOrder(v as any)}
+                onChange={(v) => setSortOrder(v as 'newest' | 'price-asc' | 'price-desc')}
               />
             </div>
             
@@ -241,7 +255,7 @@ export default function Catalog() {
 
         {/* PRODUCTS GRID / LIST */}
         <div className="flex-grow">
-          <div className="flex justify-between items-center mb-6 bg-slate-50 dark:bg-[#111] p-2 rounded-2xl border border-slate-200 dark:border-white/5">
+          <div className="flex justify-between items-center mb-6 bg-slate-100 dark:bg-[#111] p-2 rounded-2xl border border-slate-200 dark:border-white/5">
             <p className="px-4 text-slate-500 font-medium">
               {rtl ? `عرض ${filteredProducts.length} منتج` : `Showing ${filteredProducts.length} products`}
             </p>

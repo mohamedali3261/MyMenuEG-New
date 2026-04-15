@@ -5,9 +5,23 @@ import { CircleDollarSign, Package, ShoppingBag, Users, TrendingUp } from 'lucid
 import { api } from '../../api';
 import { AreaChart, Area, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, BarChart, Bar, Cell } from 'recharts';
 
+interface SalesPoint {
+  name: string;
+  sales: number;
+  orders: number;
+}
+
+interface StatsData {
+  totalSales: number;
+  totalOrders: number;
+  totalProducts: number;
+  totalCustomers: number;
+  salesChart: SalesPoint[];
+}
+
 export default function Overview() {
   const { rtl } = useStore();
-  const [data, setData] = useState<any>({
+  const [data, setData] = useState<StatsData>({
     totalSales: 0,
     totalOrders: 0,
     totalProducts: 0,
@@ -114,7 +128,7 @@ export default function Overview() {
                       contentStyle={{ backgroundColor: '#1e293b', border: 'none', borderRadius: '12px' }}
                     />
                     <Bar dataKey="orders" radius={[6, 6, 0, 0]}>
-                       {data.salesChart.map((_: any, index: number) => (
+                       {data.salesChart.map((_, index: number) => (
                          <Cell key={`cell-${index}`} fill={index % 2 === 0 ? 'var(--primary-500)' : '#f59e0b'} />
                        ))}
                     </Bar>

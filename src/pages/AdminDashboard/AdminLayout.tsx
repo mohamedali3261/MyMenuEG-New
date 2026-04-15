@@ -7,6 +7,7 @@ import { motion, AnimatePresence } from 'framer-motion';
 
 export default function AdminLayout() {
   const [isSidebarOpen, setIsSidebarOpen] = useState(false);
+  const [isSidebarCollapsed, setIsSidebarCollapsed] = useState(false);
   const { branding } = useStore();
   const location = useLocation();
 
@@ -20,10 +21,11 @@ export default function AdminLayout() {
   }, [location.pathname]);
 
   return (
-    <div className="w-full min-h-screen flex flex-col lg:flex-row bg-slate-50 dark:bg-[#080808] transition-colors duration-500 overflow-x-hidden">
+    <div className="w-full min-h-screen pt-24 md:pt-28 lg:pt-32 bg-slate-200 dark:bg-[#080808] transition-colors duration-500 overflow-x-hidden">
+      <div className="w-full min-h-[calc(100vh-8rem)] flex flex-col lg:flex-row">
       
       {/* Mobile Header */}
-      <header className="lg:hidden h-16 glass-card rounded-none border-t-0 border-x-0 px-4 flex items-center justify-between z-[90] sticky top-0">
+      <header className="lg:hidden h-16 glass-card rounded-none border-t-0 border-x-0 px-4 flex items-center justify-between z-[90]">
         <button 
           onClick={() => setIsSidebarOpen(!isSidebarOpen)}
           className="p-2 rounded-xl bg-slate-100 dark:bg-white/5 text-slate-600 dark:text-slate-300 active:scale-90 transition-transform"
@@ -42,6 +44,8 @@ export default function AdminLayout() {
       <Sidebar 
         isOpen={isSidebarOpen} 
         onClose={() => setIsSidebarOpen(false)} 
+        isCollapsed={isSidebarCollapsed}
+        onToggleCollapse={() => setIsSidebarCollapsed(prev => !prev)}
       />
 
       {/* Backdrop for mobile */}
@@ -57,9 +61,10 @@ export default function AdminLayout() {
         )}
       </AnimatePresence>
 
-      <main className="flex-grow p-4 lg:p-10 lg:max-w-[calc(100%-16rem)] min-h-[calc(100vh-4rem)] lg:min-h-screen">
+      <main className="flex-grow p-4 lg:p-10 min-h-[calc(100vh-10rem)] lg:min-h-[calc(100vh-8rem)]">
         <Outlet />
       </main>
+      </div>
     </div>
   );
 }

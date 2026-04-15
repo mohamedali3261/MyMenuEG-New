@@ -3,18 +3,20 @@ import { Monitor, CheckCircle2, Sparkles, Grid3X3, Film, Moon } from 'lucide-rea
 import { motion } from 'framer-motion';
 import { api } from '../../../../api';
 
+type BackgroundStyle = 'blobs' | 'grid' | 'cinema' | 'default';
+
 export default function BackgroundStylePanel() {
   const { rtl, backgroundStyle, setBackgroundStyle, showToast } = useStore();
 
-  const bgStyles = [
+  const bgStyles: Array<{ id: BackgroundStyle; name: string; icon: React.ReactNode }> = [
     { id: 'blobs', name: rtl ? 'الهالة المتحركة' : 'Animated Blobs', icon: <Sparkles size={28} /> },
     { id: 'grid', name: rtl ? 'الشبكة الداكنة' : 'Tech Grid', icon: <Grid3X3 size={28} /> },
     { id: 'cinema', name: rtl ? 'توهج السينما' : 'Cinema Glow', icon: <Film size={28} /> },
     { id: 'default', name: rtl ? 'المظهر الافتراضي' : 'Default', icon: <Moon size={28} /> },
   ];
 
-  const handleStyleChange = (id: string) => {
-    setBackgroundStyle(id as any);
+  const handleStyleChange = (id: BackgroundStyle) => {
+    setBackgroundStyle(id);
     api.post('/settings', { backgroundStyle: id });
     showToast(rtl ? 'تم تغيير تأثير الخلفية' : 'Background effect updated', 'success');
   };
