@@ -146,6 +146,7 @@ interface AppState {
     lightBgColor: string;
     storeName: string;
     logoUrl: string;
+    currency: string;
   }
   updateBranding: (branding: Partial<AppState['branding']>) => void
 
@@ -339,7 +340,8 @@ export const useStore = create<AppState>()(
         blendColors: false,
         lightBgColor: '#e2e8f0',
         storeName: 'MyMenuEG',
-        logoUrl: ''
+        logoUrl: '',
+        currency: 'EGP'
       },
       updateBranding: (newBranding) => set((state) => ({
         branding: { ...state.branding, ...newBranding }
