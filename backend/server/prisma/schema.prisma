@@ -1,0 +1,372 @@
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "mysql"
+  url      = env("DATABASE_URL")
+}
+
+model admins {
+  id             String          @id @db.VarChar(100)
+  username       String          @unique(map: "username") @db.VarChar(100)
+  password       String          @db.VarChar(255)
+  email          String?         @db.VarChar(255)
+  permissions    String?         @db.Text
+  is_super_admin Boolean?        @default(false)
+  is_active      Boolean?        @default(true)
+  last_login     DateTime?       @db.Timestamp(0)
+  created_at     DateTime        @default(now()) @db.Timestamp(0)
+  updated_at     DateTime?       @db.Timestamp(0)
+  refresh_tokens refresh_tokens[]
+
+  @@index([username])
+}
+
+model refresh_tokens {
+  id          String   @id @default(uuid()) @db.VarChar(36)
+  admin_id    String   @db.VarChar(100)
+  token_hash  String   @db.VarChar(64)
+  user_agent  String?  @db.VarChar(500)
+  ip_address  String?  @db.VarChar(45)
+  expires_at  DateTime @db.Timestamp(0)
+  created_at  DateTime @default(now()) @db.Timestamp(0)
+  admins      admins   @relation(fields: [admin_id], references: [id], onDelete: Cascade)
+
+  @@unique([admin_id, token_hash])
+  @@index([admin_id])
+  @@index([expires_at])
+}
+
+model backup_logs {
+  id             Int      @id @default(autoincrement())
+  action         String   @db.VarChar(100)
+  admin_username String   @db.VarChar(100)
+  details        String?  @db.Text
+  created_at     DateTime @default(now()) @db.Timestamp(0)
+}
+
+model categories {
+  id          String     @id @db.VarChar(100)
+  name_ar     String?    @db.VarChar(255)
+  name_en     String?    @db.VarChar(255)
+  icon        String?    @db.VarChar(255)
+  status      String?    @default("active") @db.VarChar(20)
+  subtitle_ar String?    @db.VarChar(255)
+  subtitle_en String?    @db.VarChar(255)
+  products    products[]
+
+  @@index([status])
+}
+
+model coupons {
+  id          String    @id @db.VarChar(100)
+  code        String?   @unique(map: "code") @db.VarChar(50)
+  type        String?   @db.VarChar(20)
+  value       Float?
+  min_order   Float?
+  usage_limit Int?
+  used_count  Int?      @default(0)
+  status      String?   @default("active") @db.VarChar(20)
+  start_date  DateTime? @db.Timestamp(0)
+  end_date    DateTime? @db.Timestamp(0)
+  created_at  DateTime  @default(now()) @db.Timestamp(0)
+
+  @@index([code])
+  @@index([status])
+}
+
+model hero_slides {
+  id          String       @id @db.VarChar(100)
+  image_url   String?      @db.VarChar(255)
+  title_ar    String?      @db.VarChar(255)
+  title_en    String?      @db.VarChar(255)
+  subtitle_ar String?      @db.Text
+  subtitle_en String?      @db.Text
+  btn_text_ar String?      @db.VarChar(100)
+  btn_text_en String?      @db.VarChar(100)
+  btn_link    String?      @db.VarChar(255)
+  order_index Int?         @default(0)
+  page_id     String?      @db.VarChar(100)
+  store_pages store_pages? @relation(fields: [page_id], references: [id], onDelete: Cascade, onUpdate: Restrict, map: "hero_slides_ibfk_1")
+
+  @@index([page_id], map: "page_id")
+}
+
+model notifications {
+  id              Int      @id @default(autoincrement())
+  target_order_id String?  @db.VarChar(100)
+  title_ar        String?  @db.VarChar(255)
+  title_en        String?  @db.VarChar(255)
+  message_ar      String?  @db.Text
+  message_en      String?  @db.Text
+  is_read         Boolean? @default(false)
+  created_at      DateTime @default(now()) @db.Timestamp(0)
+  orders          orders?  @relation(fields: [target_order_id], references: [id], onDelete: Cascade, onUpdate: Restrict, map: "notifications_ibfk_1")
+
+  @@index([target_order_id], map: "target_order_id")
+}
+
+model order_items {
+  id           Int     @id @default(autoincrement())
+  order_id     String? @db.VarChar(100)
+  product_id   String? @db.VarChar(100)
+  product_name String? @db.VarChar(255)
+  price              Float?
+  quantity           Int?
+  subtotal           Float?
+  custom_print_url   String? @db.VarChar(255)
+  custom_print_notes String? @db.Text
+  is_bundle          Boolean? @default(false)
+  orders             orders? @relation(fields: [order_id], references: [id], onDelete: Cascade, onUpdate: Restrict, map: "order_items_ibfk_1")
+
+  @@index([order_id], map: "order_id")
+}
+
+model product_bundle_items {
+  id              Int       @id @default(autoincrement())
+  bundle_id       String    @db.VarChar(100)
+  product_id      String    @db.VarChar(100)
+  quantity        Int       @default(1)
+  bundle_product  products  @relation("BundleParent", fields: [bundle_id], references: [id], onDelete: Cascade)
+  linked_product  products  @relation("BundleChild", fields: [product_id], references: [id], onDelete: Cascade)
+  
+  @@index([bundle_id])
+  @@index([product_id])
+}
+
+model orders {
+  id              String          @id @db.VarChar(100)
+  customer_name   String?         @db.VarChar(255)
+  phone           String?         @db.VarChar(50)
+  email           String?         @db.VarChar(255)
+  governorate     String?         @db.VarChar(100)
+  city            String?         @db.VarChar(100)
+  address         String?         @db.Text
+  notes           String?         @db.Text
+  total_price     Float?
+  status          String?         @default("pending") @db.VarChar(50)
+  payment_method  String?         @default("cod") @db.VarChar(20)
+  payment_status  String?         @default("pending") @db.VarChar(20)
+  payment_id      String?         @db.VarChar(255)
+  created_at      DateTime        @default(now()) @db.Timestamp(0)
+  updated_at      DateTime?       @db.Timestamp(0)
+  discount_amount Float?          @default(0)
+  coupon_id       String?         @db.VarChar(100)
+  tracking_id     String?         @db.VarChar(100)
+  notifications   notifications[]
+  order_items     order_items[]
+
+  @@index([phone])
+  @@index([status])
+  @@index([created_at])
+  @@index([status, created_at])
+  @@index([payment_status])
+}
+
+model product_images {
+  id         Int       @id @default(autoincrement())
+  product_id String?   @db.VarChar(100)
+  url        String?   @db.VarChar(255)
+  products   products? @relation(fields: [product_id], references: [id], onDelete: Cascade, onUpdate: Restrict, map: "product_images_ibfk_1")
+
+  @@index([product_id], map: "product_id")
+}
+
+model product_quantity_prices {
+  id             Int       @id @default(autoincrement())
+  product_id     String?   @db.VarChar(100)
+  quantity_label String    @db.VarChar(100)
+  price          Float
+  old_price      Float?    @default(0)
+  products       products? @relation(fields: [product_id], references: [id], onDelete: Cascade, onUpdate: Restrict, map: "product_quantity_prices_ibfk_1")
+
+  @@index([product_id], map: "product_id")
+}
+
+model product_specs {
+  id         Int       @id @default(autoincrement())
+  product_id String?   @db.VarChar(100)
+  key_ar     String?   @db.VarChar(255)
+  key_en     String?   @db.VarChar(255)
+  val_ar     String?   @db.Text
+  val_en     String?   @db.Text
+  products   products? @relation(fields: [product_id], references: [id], onDelete: Cascade, onUpdate: Restrict, map: "product_specs_ibfk_1")
+
+  @@index([product_id], map: "product_id")
+}
+
+model products {
+  id                      String                    @id @db.VarChar(100)
+  name_ar                 String?                   @db.VarChar(255)
+  name_en                 String?                   @db.VarChar(255)
+  description_ar          String?                   @db.Text
+  description_en          String?                   @db.Text
+  price                   Float?
+  old_price               Float?
+  stock                   Int?
+  status                  String?                   @default("active") @db.VarChar(20)
+  image_url               String?                   @db.VarChar(255)
+  category_id             String?                   @db.VarChar(100)
+  is_best_seller          Boolean?                  @default(false)
+  shipping_info_ar        String?                   @db.Text
+  shipping_info_en        String?                   @db.Text
+  warranty_info_ar        String?                   @db.Text
+  warranty_info_en        String?                   @db.Text
+  video_url               String?                   @db.Text
+  view_count              Int?                      @default(0)
+  carton_details_ar       String?                   @db.Text
+  carton_details_en       String?                   @db.Text
+  page_id                 String?                   @db.VarChar(100)
+  brand_ar                String?                   @db.VarChar(255)
+  brand_en                String?                   @db.VarChar(255)
+  material_ar             String?                   @db.VarChar(255)
+  material_en             String?                   @db.VarChar(255)
+  dimensions_ar           String?                   @db.VarChar(255)
+  dimensions_en           String?                   @db.VarChar(255)
+  usage_notes_ar          String?                   @db.Text
+  usage_notes_en          String?                   @db.Text
+  template_key            String?                   @db.VarChar(100)
+  created_at              DateTime?                 @default(now()) @db.Timestamp(0)
+  updated_at              DateTime?                 @db.Timestamp(0)
+  allow_custom_print      Boolean?                  @default(false)
+  product_detail_items    product_detail_items[]
+  product_images          product_images[]
+  product_quantity_prices product_quantity_prices[]
+  product_specs           product_specs[]
+  product_variants        product_variants[]
+  product_faqs            product_faqs[]
+  product_reviews         product_reviews[]
+  fbt_main                product_fbt[]             @relation("ProductToFBT")
+  fbt_related             product_fbt[]             @relation("FBTToProduct")
+  bundle_parent           product_bundle_items[]    @relation("BundleParent")
+  bundle_child            product_bundle_items[]    @relation("BundleChild")
+  categories              categories?               @relation(fields: [category_id], references: [id], onDelete: Cascade, onUpdate: Restrict, map: "products_ibfk_1")
+  store_pages             store_pages?              @relation(fields: [page_id], references: [id], onUpdate: Restrict, map: "products_ibfk_2")
+
+  @@index([category_id], map: "category_id")
+  @@index([page_id], map: "page_id")
+  @@index([status])
+  @@index([is_best_seller])
+  @@index([status, category_id])
+}
+
+model product_detail_items {
+  id          Int       @id @default(autoincrement())
+  product_id  String?   @db.VarChar(100)
+  label_ar    String?   @db.VarChar(255)
+  label_en    String?   @db.VarChar(255)
+  value_ar    String?   @db.Text
+  value_en    String?   @db.Text
+  order_index Int?      @default(0)
+  products    products? @relation(fields: [product_id], references: [id], onDelete: Cascade, onUpdate: Restrict, map: "product_detail_items_ibfk_1")
+
+  @@index([product_id], map: "product_id")
+}
+
+model product_faqs {
+  id          Int       @id @default(autoincrement())
+  product_id  String?   @db.VarChar(100)
+  question_ar String?   @db.VarChar(255)
+  question_en String?   @db.VarChar(255)
+  answer_ar   String?   @db.Text
+  answer_en   String?   @db.Text
+  order_index Int?      @default(0)
+  products    products? @relation(fields: [product_id], references: [id], onDelete: Cascade, onUpdate: Restrict, map: "product_faqs_ibfk_1")
+
+  @@index([product_id], map: "product_id")
+}
+
+model product_variants {
+  id           Int       @id @default(autoincrement())
+  product_id   String?   @db.VarChar(100)
+  label_ar     String?   @db.VarChar(255)
+  label_en     String?   @db.VarChar(255)
+  sku          String?   @db.VarChar(100)
+  price        Float     @db.Float
+  old_price    Float?    @default(0) @db.Float
+  stock        Int?      @default(0)
+  is_default   Boolean?  @default(false)
+  option_group String?   @db.VarChar(100)
+  color_value  String?   @db.VarChar(100)
+  size_value   String?   @db.VarChar(150)
+  color_ar     String?   @db.VarChar(100)
+  color_en     String?   @db.VarChar(100)
+  size_ar      String?   @db.VarChar(150)
+  size_en      String?   @db.VarChar(150)
+  swatch_value String?   @db.VarChar(100)
+  image_url    String?   @db.VarChar(255)
+  sort_order   Int?      @default(0)
+  products     products? @relation(fields: [product_id], references: [id], onDelete: Cascade, onUpdate: Restrict, map: "product_variants_ibfk_1")
+  product_variant_images product_variant_images[]
+
+  @@index([product_id], map: "product_id")
+}
+
+model product_variant_images {
+  id         Int              @id @default(autoincrement())
+  variant_id Int?
+  url        String?          @db.VarChar(255)
+  variants   product_variants? @relation(fields: [variant_id], references: [id], onDelete: Cascade, onUpdate: Restrict)
+
+  @@index([variant_id])
+}
+
+model settings {
+  key_name String  @id @db.VarChar(100)
+  value    String? @db.Text
+}
+
+model product_reviews {
+  id          Int      @id @default(autoincrement())
+  product_id  String   @db.VarChar(100)
+  user_name   String   @db.VarChar(100)
+  rating      Int      @db.TinyInt
+  comment_ar  String?  @db.Text
+  comment_en  String?  @db.Text
+  status      String   @default("pending") @db.VarChar(20)
+  created_at  DateTime @default(now()) @db.Timestamp(0)
+  products    products? @relation(fields: [product_id], references: [id], onDelete: Cascade, onUpdate: Restrict)
+
+  @@index([product_id])
+  @@index([status])
+}
+
+model product_fbt {
+  id               Int      @id @default(autoincrement())
+  product_id       String   @db.VarChar(100)
+  related_prod_id  String   @db.VarChar(100)
+  
+  product          products @relation("ProductToFBT", fields: [product_id], references: [id], onDelete: Cascade)
+  related_product  products @relation("FBTToProduct", fields: [related_prod_id], references: [id], onDelete: Cascade)
+
+  @@index([product_id])
+  @@index([related_prod_id])
+}
+
+model store_pages {
+  id             String        @id @db.VarChar(100)
+  name_ar        String?       @db.VarChar(255)
+  name_en        String?       @db.VarChar(255)
+  slug           String?       @unique(map: "slug") @db.VarChar(255)
+  is_dynamic     Boolean?      @default(true)
+  show_in_navbar Boolean?      @default(true)
+  order_index    Int?          @default(0)
+  created_at     DateTime      @default(now()) @db.Timestamp(0)
+  meta_desc      String?       @db.Text
+  meta_title     String?       @db.VarChar(255)
+  status         String?       @default("active") @db.VarChar(20)
+  content_ar     String?       @db.Text
+  content_en     String?       @db.Text
+  hide_empty     Boolean?      @default(true)
+  icon           String?       @db.VarChar(100)
+  layout_style   String?       @default("grid") @db.VarChar(20)
+  banner_url     String?       @db.VarChar(255)
+  banner_size    String?       @default("medium") @db.VarChar(20)
+  views                Int?          @default(0)
+  spotlight_product_id String?       @db.VarChar(100)
+  countdown_end_date   DateTime?     @db.Timestamp(0)
+  show_search          Boolean?      @default(false)
+  hero_slides          hero_slides[]
+  products       products[]
+}

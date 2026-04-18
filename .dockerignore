@@ -1,0 +1,15 @@
+node_modules/
+.git/
+.vscode/
+dist/
+dist-server/
+dist-ssr/
+*.log
+npm-debug.log*
+.env
+.env.*
+!.env.example
+*.md
+ scratch/
+backups/
+logs/

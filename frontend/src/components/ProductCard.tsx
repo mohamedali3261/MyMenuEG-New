@@ -1,0 +1,60 @@
+import { useStore } from '../store/store';
+import { ClassicElegantCard, Floating3DCard, MinimalPosterCard, InteractiveRevealCard, ModernGlassCard } from '../pages/Home/components/ProductCardVariants';
+
+interface ProductCardData {
+  id: string;
+  name_ar: string;
+  name_en: string;
+  description_ar: string;
+  description_en: string;
+  price: number;
+  image_url?: string;
+  images?: string[];
+  variants?: Array<{ image_url?: string; images?: string[] }>;
+}
+
+export default function ProductCard({ product }: { product: ProductCardData }) {
+  const { cardStyle, rtl, addToCart, showToast } = useStore();
+
+  const imagesForFallback = [
+    product.image_url,
+    ...(product.images || []),
+    ...(product.variants?.flatMap(v => v.images || []) || []),
+    ...(product.variants?.map(v => v.image_url) || [])
+  ].filter(Boolean);
+
+  const finalImage = imagesForFallback[0] || '';
+
+  const handleAdd = (e: React.MouseEvent) => {
+    e.preventDefault();
+    e.stopPropagation();
+    addToCart({ 
+      id: product.id, 
+      name: rtl ? product.name_ar : product.name_en, 
+      price: product.price, 
+      quantity: 1,
+      image: finalImage
+    });
+    showToast(rtl ? `تمت إضافة ${product.name_ar} للسلة` : `${product.name_en} added to cart!`);
+  };
+
+  const Card = 
+    cardStyle === 'classic' ? ClassicElegantCard : 
+    cardStyle === 'minimal' ? MinimalPosterCard : 
+    cardStyle === 'reveal' ? InteractiveRevealCard :
+    cardStyle === 'modern' ? ModernGlassCard :
+    Floating3DCard;
+
+  return (
+    <Card 
+      prod={{
+        ...product,
+        name: rtl ? product.name_ar : product.name_en,
+        description: rtl ? product.description_ar : product.description_en,
+        onAdd: handleAdd
+      }} 
+      rtl={rtl} 
+      onAdd={handleAdd}
+    />
+  );
+}

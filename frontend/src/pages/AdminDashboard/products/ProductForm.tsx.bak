@@ -1,0 +1,1000 @@
+import { useState, useEffect } from 'react';
+import { useStore } from '../../../store/store';
+import { Link, useParams, useNavigate } from 'react-router-dom';
+import { ArrowRight, Plus, Trash2, Save, Loader2, Tag, Layout, Info, Banknote, Image as ImageIcon, ClipboardList, Truck, HelpCircle, Box, Zap } from 'lucide-react';
+import { motion, AnimatePresence } from 'framer-motion';
+import type { AxiosError } from 'axios';
+import { api } from '../../../api';
+import PremiumDropdown from '../../../components/ui/PremiumDropdown';
+import { PRODUCT_TEMPLATE_OPTIONS, getProductTemplateByKey, type ProductVariantTemplate } from './productTemplates';
+import { resolveAssetUrl } from '../../../utils/assetUrl';
+
+interface OptionItem {
+  id: string;
+  name_ar: string;
+  name_en: string;
+}
+
+interface QuantityPrice {
+  quantity_label: string;
+  price: number;
+  old_price: number;
+}
+
+interface DetailItem {
+  label_ar: string;
+  label_en: string;
+  value_ar: string;
+  value_en: string;
+  order_index: number;
+}
+
+interface ProductFaq {
+  question_ar: string;
+  question_en: string;
+  answer_ar: string;
+  answer_en: string;
+  order_index: number;
+}
+
+type ProductVariant = ProductVariantTemplate;
+
+const DIMENSION_PRESET_MAP: Record<string, { ar: string; en: string }> = {
+  cup_4oz: { ar: 'قطر 6 سم × ارتفاع 6 سم (4 أونصة)', en: '6 cm diameter × 6 cm height (4 oz)' },
+  cup_8oz: { ar: 'قطر 8 سم × ارتفاع 9 سم (8 أونصة)', en: '8 cm diameter × 9 cm height (8 oz)' },
+  cup_12oz: { ar: 'قطر 9 سم × ارتفاع 11 سم (12 أونصة)', en: '9 cm diameter × 11 cm height (12 oz)' },
+  cup_16oz: { ar: 'قطر 9.5 سم × ارتفاع 13 سم (16 أونصة)', en: '9.5 cm diameter × 13 cm height (16 oz)' },
+  cup_22oz: { ar: 'قطر 9.8 سم × ارتفاع 16 سم (22 أونصة)', en: '9.8 cm diameter × 16 cm height (22 oz)' },
+  cup_32oz: { ar: 'قطر 10.5 سم × ارتفاع 17.5 سم (32 أونصة)', en: '10.5 cm diameter × 17.5 cm height (32 oz)' },
+  box_small: { ar: '20 × 15 × 8 سم', en: '20 × 15 × 8 cm' },
+  box_medium: { ar: '25 × 20 × 10 سم', en: '25 × 20 × 10 cm' },
+  box_large: { ar: '30 × 25 × 12 سم', en: '30 × 25 × 12 cm' },
+  box_xl: { ar: '35 × 30 × 14 سم', en: '35 × 30 × 14 cm' },
+  bag_small: { ar: '18 × 10 × 25 سم', en: '18 × 10 × 25 cm' },
+  bag_medium: { ar: '24 × 12 × 32 سم', en: '24 × 12 × 32 cm' },
+  bag_large: { ar: '32 × 14 × 40 سم', en: '32 × 14 × 40 cm' },
+  lid_80mm: { ar: 'قطر 80 مم', en: '80 mm diameter' },
+  lid_90mm: { ar: 'قطر 90 مم', en: '90 mm diameter' },
+  sleeve_standard: { ar: '12 × 6 سم', en: '12 × 6 cm' }
+};
+
+type ProductFormTab = 'basic' | 'pricing' | 'media' | 'specs' | 'shipping' | 'relations';
+
+export default function ProductForm() {
+  const { rtl, showToast } = useStore();
+  const { id } = useParams();
+  const navigate = useNavigate();
+  
+  // Basic states
+  const [loading, setLoading] = useState(false);
+  const [categories, setCategories] = useState<OptionItem[]>([]);
+  const [pages, setPages] = useState<OptionItem[]>([]);
+  const [activeTab, setActiveTab] = useState<ProductFormTab>('basic');
+  const [templateKey, setTemplateKey] = useState('');
+  const [formData, setFormData] = useState({
+    name_ar: '', name_en: '', description_ar: '', description_en: '', 
+    price: 0, old_price: 0, stock: 0, category_id: '', page_id: '',
+    is_best_seller: false,
+    shipping_info_ar: '', shipping_info_en: '',
+    warranty_info_ar: '', warranty_info_en: '',
+    carton_details_ar: '', carton_details_en: '',
+    brand_ar: '', brand_en: '',
+    material_ar: '', material_en: '',
+    dimensions_ar: '', dimensions_en: '',
+    usage_notes_ar: '', usage_notes_en: '',
+    video_url: ''
+  });
+
+  // Dynamic features/specs state
+  const [specs, setSpecs] = useState([{ key_ar: '', key_en: '', val_ar: '', val_en: '' }]);
+  const [images, setImages] = useState<string[]>([]);
+  const [quantityPrices, setQuantityPrices] = useState<QuantityPrice[]>([]);
+  const [detailItems, setDetailItems] = useState<DetailItem[]>([]);
+  const [faqs, setFaqs] = useState<ProductFaq[]>([]);
+  const [fbtIds, setFbtIds] = useState<string[]>([]);
+  const [fbtProductDetails, setFbtProductDetails] = useState<any[]>([]); // To display names/images of selected FBTs
+  const [fbtSearch, setFbtSearch] = useState('');
+  const [fbtResults, setFbtResults] = useState<any[]>([]);
+  const [searchingFbt, setSearchingFbt] = useState(false);
+  const [variants, setVariants] = useState<ProductVariant[]>([]);
+  const [dimensionsPreset, setDimensionsPreset] = useState('');
+
+  const sidebarTabs = [
+    { id: 'basic', label: rtl ? 'البيانات الأساسية' : 'Basic Info', icon: <Info size={18} /> },
+    { id: 'pricing', label: rtl ? 'التسعير والمخزون' : 'Pricing & Inventory', icon: <Banknote size={18} /> },
+    { id: 'media', label: rtl ? 'الصور والميديا' : 'Media & Assets', icon: <ImageIcon size={18} /> },
+    { id: 'specs', label: rtl ? 'المواصفات والتفاصيل' : 'Specs & Details', icon: <ClipboardList size={18} /> },
+    { id: 'shipping', label: rtl ? 'الشحن والضمان' : 'Shipping & Warranty', icon: <Truck size={18} /> },
+    { id: 'relations', label: rtl ? 'الأسئلة والروابط' : 'FAQ & Relationships', icon: <HelpCircle size={18} /> },
+  ];
+  
+  const addSpec = () => setSpecs([...specs, { key_ar: '', key_en: '', val_ar: '', val_en: '' }]);
+  const removeSpec = (index: number) => setSpecs(specs.filter((_, i) => i !== index));
+
+  const addQuantityPrice = () => setQuantityPrices([...quantityPrices, { quantity_label: '', price: 0, old_price: 0 }]);
+  const removeQuantityPrice = (index: number) => setQuantityPrices(quantityPrices.filter((_, i) => i !== index));
+  const updateQuantityPrice = (index: number, key: keyof QuantityPrice, val: string | number) => {
+    const updated = [...quantityPrices];
+    updated[index] = { ...updated[index], [key]: val };
+    setQuantityPrices(updated);
+  };
+
+  const addDetailItem = () => setDetailItems([...detailItems, { label_ar: '', label_en: '', value_ar: '', value_en: '', order_index: detailItems.length }]);
+  const removeDetailItem = (index: number) => setDetailItems(detailItems.filter((_, i) => i !== index));
+  const updateDetailItem = (index: number, key: keyof DetailItem, val: string | number) => {
+    const updated = [...detailItems];
+    updated[index] = { ...updated[index], [key]: val };
+    setDetailItems(updated);
+  };
+
+  const addFaq = () => setFaqs([...faqs, { question_ar: '', question_en: '', answer_ar: '', answer_en: '', order_index: faqs.length }]);
+  const removeFaq = (index: number) => setFaqs(faqs.filter((_, i) => i !== index));
+  const updateFaq = (index: number, key: keyof ProductFaq, val: string | number) => {
+    const updated = [...faqs];
+    updated[index] = { ...updated[index], [key]: val };
+    setFaqs(updated);
+  };
+
+  const handleFbtSearch = async () => {
+    if (!fbtSearch.trim()) return;
+    setSearchingFbt(true);
+    try {
+      const res = await api.get(`/products?q=${encodeURIComponent(fbtSearch)}&limit=10`);
+      // Filter out current product
+      setFbtResults((res.data.products || []).filter((p: any) => p.id !== id));
+    } catch (err) {
+      console.error(err);
+    } finally {
+      setSearchingFbt(false);
+    }
+  };
+
+  const addFbt = (prod: any) => {
+    if (fbtIds.includes(prod.id)) return;
+    setFbtIds([...fbtIds, prod.id]);
+    setFbtProductDetails([...fbtProductDetails, prod]);
+    setFbtResults([]);
+    setFbtSearch('');
+  };
+
+  const removeFbt = (prodId: string) => {
+    setFbtIds(fbtIds.filter(id => id !== prodId));
+    setFbtProductDetails(fbtProductDetails.filter(p => p.id !== prodId));
+  };
+
+  const addVariant = () => setVariants([...variants, { label_ar: '', label_en: '', sku: '', price: 0, old_price: 0, stock: 0, is_default: variants.length === 0, image_url: '' }]);
+  const removeVariant = (index: number) => setVariants(variants.filter((_, i) => i !== index));
+  const updateVariant = (index: number, key: keyof ProductVariant, val: string | number | boolean) => {
+    const updated = [...variants];
+    updated[index] = { ...updated[index], [key]: val } as ProductVariant;
+    if (key === 'is_default' && Boolean(val)) {
+      for (let i = 0; i < updated.length; i += 1) updated[i].is_default = i === index;
+    }
+    setVariants(updated);
+  };
+
+  const updateForm = <K extends keyof typeof formData>(key: K, val: (typeof formData)[K]) =>
+    setFormData(prev => ({ ...prev, [key]: val }));
+
+  useEffect(() => {
+    // Fetch categories and pages for the dropdowns
+    api.get('/categories').then(res => setCategories(res.data)).catch(console.error);
+    api.get('/pages').then(res => setPages(res.data)).catch(console.error);
+
+    // If editing, fetch product data
+    if (id) {
+      setLoading(true);
+      api.get(`/products/${id}`)
+        .then(res => {
+          const prod = res.data;
+          setFormData({
+            name_ar: prod.name_ar || '',
+            name_en: prod.name_en || '',
+            description_ar: prod.description_ar || '',
+            description_en: prod.description_en || '',
+            price: prod.price || 0,
+            old_price: prod.old_price || 0,
+            stock: prod.stock || 0,
+            category_id: prod.category_id || '',
+            page_id: prod.page_id || '',
+            is_best_seller: !!prod.is_best_seller,
+            shipping_info_ar: prod.shipping_info_ar || '',
+            shipping_info_en: prod.shipping_info_en || '',
+            warranty_info_ar: prod.warranty_info_ar || '',
+            warranty_info_en: prod.warranty_info_en || '',
+            carton_details_ar: prod.carton_details_ar || '',
+            carton_details_en: prod.carton_details_en || '',
+            brand_ar: prod.brand_ar || '',
+            brand_en: prod.brand_en || '',
+            material_ar: prod.material_ar || '',
+            material_en: prod.material_en || '',
+            dimensions_ar: prod.dimensions_ar || '',
+            dimensions_en: prod.dimensions_en || '',
+            usage_notes_ar: prod.usage_notes_ar || '',
+            usage_notes_en: prod.usage_notes_en || '',
+            video_url: prod.video_url || ''
+          });
+          if (prod.specs) setSpecs(prod.specs);
+          if (Array.isArray(prod.images) && prod.images.length > 0) {
+            setImages(prod.images);
+          } else if (prod.image_url) {
+            setImages([prod.image_url]);
+          }
+          if (prod.quantity_prices) setQuantityPrices(prod.quantity_prices);
+          if (prod.detail_items) setDetailItems(prod.detail_items);
+          if (prod.faqs) setFaqs(prod.faqs);
+          if (prod.fbt_products) {
+            setFbtIds(prod.fbt_products.map((p: any) => p.id));
+            setFbtProductDetails(prod.fbt_products);
+          }
+          if (prod.variants) {
+            const normalized = (prod.variants as any[]).map((v) => ({
+              ...v,
+              image_url: v?.image_url ?? v?.imageUrl ?? '',
+            }));
+            setVariants(normalized);
+          }
+          if (prod.template_key) setTemplateKey(prod.template_key);
+        })
+        .catch(console.error)
+        .finally(() => setLoading(false));
+    }
+  }, [id]);
+
+  const handleImageUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
+    if (!e.target.files || e.target.files.length === 0) return;
+    setLoading(true);
+    const file = e.target.files[0];
+    const data = new FormData();
+    data.append('image', file);
+    data.append('page', 'products');
+    if (formData.category_id) data.append('categoryId', formData.category_id);
+    if (formData.name_en) data.append('productName', formData.name_en);
+
+    try {
+      const res = await api.post('/upload', data);
+      if (res.data.url) {
+        setImages([...images, res.data.url]);
+        showToast(rtl ? 'تم رفع الصورة' : 'Image uploaded', 'success');
+      }
+    } catch (err) {
+      console.error('Upload failed', err);
+      showToast(rtl ? 'فشل رفع الصورة' : 'Image upload failed', 'error');
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  const handleVariantImageUpload = async (variantIndex: number, e: React.ChangeEvent<HTMLInputElement>) => {
+    if (!e.target.files || e.target.files.length === 0) return;
+    setLoading(true);
+    const file = e.target.files[0];
+    const data = new FormData();
+    data.append('image', file);
+    data.append('page', 'products');
+    if (formData.category_id) data.append('categoryId', formData.category_id);
+    if (formData.name_en) data.append('productName', formData.name_en);
+
+    try {
+      const res = await api.post('/upload', data);
+      if (res.data.url) {
+        updateVariant(variantIndex, 'image_url', res.data.url);
+        showToast(rtl ? 'تم رفع صورة النسخة' : 'Variant image uploaded', 'success');
+      }
+    } catch (err) {
+      console.error('Variant upload failed', err);
+      showToast(rtl ? 'فشل رفع صورة النسخة' : 'Variant image upload failed', 'error');
+    } finally {
+      setLoading(false);
+      // allow re-uploading the same file
+      e.target.value = '';
+    }
+  };
+
+  const handleGalleryImageUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
+    if (!e.target.files || e.target.files.length === 0) return;
+    setLoading(true);
+    const file = e.target.files[0];
+    const data = new FormData();
+    data.append('image', file);
+    data.append('page', 'products');
+    if (formData.category_id) data.append('categoryId', formData.category_id);
+    if (formData.name_en) data.append('productName', formData.name_en);
+
+    try {
+      const res = await api.post('/upload', data);
+      if (res.data.url) {
+        setImages((prev) => [...prev, res.data.url]);
+        showToast(rtl ? 'تم رفع الصورة' : 'Image uploaded', 'success');
+      }
+    } catch (err) {
+      console.error('Upload failed', err);
+      showToast(rtl ? 'فشل رفع الصورة' : 'Image upload failed', 'error');
+    } finally {
+      setLoading(false);
+      e.target.value = '';
+    }
+  };
+
+  const handleGalleryImageReplace = async (index: number, e: React.ChangeEvent<HTMLInputElement>) => {
+    if (!e.target.files || e.target.files.length === 0) return;
+    setLoading(true);
+    const file = e.target.files[0];
+    const data = new FormData();
+    data.append('image', file);
+    data.append('page', 'products');
+    if (formData.category_id) data.append('categoryId', formData.category_id);
+    if (formData.name_en) data.append('productName', formData.name_en);
+
+    try {
+      const res = await api.post('/upload', data);
+      if (res.data.url) {
+        setImages((prev) => prev.map((img, i) => (i === index ? res.data.url : img)));
+        showToast(rtl ? 'تم استبدال الصورة' : 'Image replaced', 'success');
+      }
+    } catch (err) {
+      console.error('Replace failed', err);
+      showToast(rtl ? 'فشل استبدال الصورة' : 'Replace failed', 'error');
+    } finally {
+      setLoading(false);
+      e.target.value = '';
+    }
+  };
+
+  /** Delete an image from the server disk and remove from state */
+  const handleDeleteImage = async (index: number) => {
+    const url = images[index];
+    if (url) {
+      // Fire-and-forget: delete from disk
+      api.delete('/upload', { data: { url } }).catch(() => {});
+    }
+    setImages((prev) => prev.filter((_, idx) => idx !== index));
+  };
+
+  const saveProduct = async () => {
+    if (!formData.name_ar.trim() || !formData.name_en.trim()) {
+      return showToast(rtl ? 'برجاء إدخال اسم المنتج بالعربي والإنجليزي' : 'Please enter product name in Arabic and English', 'error');
+    }
+    if (formData.price <= 0) {
+      return showToast(rtl ? 'السعر الأساسي يجب أن يكون أكبر من صفر' : 'Base price must be greater than zero', 'error');
+    }
+    if (!formData.category_id) {
+      return showToast(rtl ? 'برجاء اختيار التصنيف' : 'Please select a category', 'error');
+    }
+    if (!formData.page_id) {
+       return showToast(rtl ? 'برجاء اختيار الصفحة المستهدفة' : 'Please select a target page', 'error');
+    }
+    const invalidQuantityPrice = quantityPrices.find(qp => !qp.quantity_label.trim() || qp.price <= 0);
+    if (invalidQuantityPrice) {
+      return showToast(
+        rtl ? 'تأكد أن كل سعر كمية يحتوي على عدد وسعر أكبر من صفر' : 'Ensure each quantity price has a label and price greater than zero',
+        'error'
+      );
+    }
+    const invalidVariant = variants.find(variant => variant.price <= 0);
+    if (invalidVariant) {
+      return showToast(rtl ? 'سعر كل Variant يجب أن يكون أكبر من صفر' : 'Each variant price must be greater than zero', 'error');
+    }
+    setLoading(true);
+    try {
+      const normalizedVariants = variants.map((v) => ({
+        ...v,
+        image_url: v.image_url || '',
+      }));
+      await api.post('/products', {
+        id, 
+        ...formData,
+        image_url: images[0] || undefined,
+        specs,
+        images,
+        quantity_prices: quantityPrices,
+        detail_items: detailItems,
+        faqs,
+        fbt_ids: fbtIds,
+        template_key: templateKey,
+        variants: normalizedVariants
+      });
+      showToast(rtl ? 'تم حفظ المنتج بنجاح!' : 'Product saved successfully!', 'success');
+      navigate('/admin/products');
+    } catch (error: unknown) {
+      console.error('Save product failed', error);
+      const axiosError = error as AxiosError<{ error?: string; details?: string[] }>;
+      const apiDetails = axiosError.response?.data?.details;
+      const apiError = axiosError.response?.data?.error;
+      const backendMessage = Array.isArray(apiDetails) && apiDetails.length > 0
+        ? apiDetails[0]
+        : apiError;
+      showToast(
+        backendMessage || (rtl ? 'فشل حفظ المنتج' : 'Failed to save product'),
+        'error'
+      );
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  const categoryOptions = [
+    { value: '', labelAr: '-- بدون تصنيف --', labelEn: '-- Uncategorized --', icon: <Tag size={14} className="opacity-40" /> },
+    ...categories.map(c => ({
+      value: c.id,
+      labelAr: c.name_ar,
+      labelEn: c.name_en,
+      icon: <Tag size={14} />,
+      color: 'text-primary-500',
+      bg: 'bg-primary-500/10'
+    }))
+  ];
+
+  const pageOptions = [
+    { value: '', labelAr: '-- الصفحة العامة --', labelEn: '-- General Products --', icon: <Layout size={14} className="opacity-40" /> },
+    ...pages.map(p => ({
+      value: p.id,
+      labelAr: p.name_ar,
+      labelEn: p.name_en,
+      icon: <Layout size={14} />,
+      color: 'text-primary-500',
+      bg: 'bg-primary-500/10'
+    }))
+  ];
+
+  const dimensionsPresetOptions = [
+    { value: '', labelAr: '-- اكتب أبعاد مخصصة --', labelEn: '-- Custom dimensions --' },
+    { value: 'cup_4oz', labelAr: 'كوب 4 أونصة', labelEn: 'Cup 4 oz' },
+    { value: 'cup_8oz', labelAr: 'كوب 8 أونصة', labelEn: 'Cup 8 oz' },
+    { value: 'cup_12oz', labelAr: 'كوب 12 أونصة', labelEn: 'Cup 12 oz' },
+    { value: 'cup_16oz', labelAr: 'كوب 16 أونصة', labelEn: 'Cup 16 oz' },
+    { value: 'cup_22oz', labelAr: 'كوب 22 أونصة', labelEn: 'Cup 22 oz' },
+    { value: 'cup_32oz', labelAr: 'كوب 32 أونصة', labelEn: 'Cup 32 oz' },
+    { value: 'box_small', labelAr: 'علبة صغيرة', labelEn: 'Small Box' },
+    { value: 'box_medium', labelAr: 'علبة متوسطة', labelEn: 'Medium Box' },
+    { value: 'box_large', labelAr: 'علبة كبيرة', labelEn: 'Large Box' },
+    { value: 'box_xl', labelAr: 'علبة كبيرة جدًا', labelEn: 'XL Box' },
+    { value: 'bag_small', labelAr: 'كيس صغير', labelEn: 'Small Bag' },
+    { value: 'bag_medium', labelAr: 'كيس متوسط', labelEn: 'Medium Bag' },
+    { value: 'bag_large', labelAr: 'كيس كبير', labelEn: 'Large Bag' },
+    { value: 'lid_80mm', labelAr: 'غطاء 80 مم', labelEn: 'Lid 80 mm' },
+    { value: 'lid_90mm', labelAr: 'غطاء 90 مم', labelEn: 'Lid 90 mm' },
+    { value: 'sleeve_standard', labelAr: 'حامل قياسي', labelEn: 'Standard Sleeve' }
+  ];
+
+  const templateOptions = [
+    { value: '', labelAr: '-- بدون قالب --', labelEn: '-- No template --' },
+    ...PRODUCT_TEMPLATE_OPTIONS
+  ];
+
+  const handleDimensionsPresetChange = (presetKey: string) => {
+    setDimensionsPreset(presetKey);
+    const preset = DIMENSION_PRESET_MAP[presetKey];
+    if (!preset) return;
+    setFormData(prev => ({ ...prev, dimensions_ar: preset.ar, dimensions_en: preset.en }));
+  };
+
+  const applyTemplate = (key: string) => {
+    setTemplateKey(key);
+    const tpl = getProductTemplateByKey(key);
+    if (!tpl) return;
+    const clonedSpecs = tpl.preset.specs.map(spec => ({ ...spec }));
+    const clonedDetailItems = tpl.preset.detail_items.map(item => ({ ...item }));
+    const clonedVariants = tpl.preset.variants.map(variant => ({ ...variant }));
+    setFormData(prev => ({
+      ...prev,
+      name_ar: tpl.preset.name_ar,
+      name_en: tpl.preset.name_en,
+      description_ar: tpl.preset.description_ar,
+      description_en: tpl.preset.description_en,
+      price: tpl.preset.price,
+      old_price: tpl.preset.old_price,
+      stock: tpl.preset.stock,
+      shipping_info_ar: tpl.preset.shipping_info_ar,
+      shipping_info_en: tpl.preset.shipping_info_en,
+      warranty_info_ar: tpl.preset.warranty_info_ar,
+      warranty_info_en: tpl.preset.warranty_info_en,
+      carton_details_ar: tpl.preset.carton_details_ar,
+      carton_details_en: tpl.preset.carton_details_en,
+      brand_ar: tpl.preset.brand_ar,
+      brand_en: tpl.preset.brand_en,
+      material_ar: tpl.preset.material_ar,
+      material_en: tpl.preset.material_en,
+      dimensions_ar: tpl.preset.dimensions_ar,
+      dimensions_en: tpl.preset.dimensions_en,
+      usage_notes_ar: tpl.preset.usage_notes_ar,
+      usage_notes_en: tpl.preset.usage_notes_en
+    }));
+    setDimensionsPreset('');
+    setSpecs(clonedSpecs);
+    setDetailItems(clonedDetailItems);
+    setVariants(clonedVariants);
+    setActiveTab('basic');
+    showToast(rtl ? 'تم تطبيق القالب وملء البيانات' : 'Template applied and fields populated', 'success');
+  };
+
+  return (
+    <div className={`max-w-7xl mx-auto pb-32 relative ${rtl ? 'rtl' : 'ltr'}`}>
+      
+      {/* Header */}
+      <div className="flex items-center justify-between mb-10 px-4 md:px-0">
+        <div className="flex items-center gap-5">
+          <Link to="/admin/products" className="p-3 bg-white/5 hover:bg-white/10 rounded-2xl transition-all border border-white/5">
+            <ArrowRight size={24} className={rtl ? '' : 'rotate-180'} />
+          </Link>
+          <div>
+            <h1 className="text-3xl font-black tracking-tight">{rtl ? 'إدارة المنتج' : 'Product Management'}</h1>
+            <p className="text-slate-500 font-medium text-sm mt-1">{rtl ? 'تعديل الخصائص والتفاصيل المتقدمة' : 'Manage advanced specifications and details'}</p>
+          </div>
+        </div>
+      </div>
+
+      <div className="flex flex-col lg:flex-row gap-8">
+        {/* Sidebar Navigation */}
+        <aside className="lg:w-72 shrink-0">
+          <div className="glass-card p-3 sticky top-24 space-y-1">
+            {sidebarTabs.map(tab => (
+              <button
+                key={tab.id}
+                onClick={() => setActiveTab(tab.id as ProductFormTab)}
+                className={`w-full flex items-center gap-3 px-4 py-3.5 rounded-xl font-bold transition-all ${activeTab === tab.id ? 'bg-primary-500 text-white shadow-xl shadow-primary-500/20' : 'text-slate-400 hover:bg-white/5 hover:text-slate-300'}`}
+              >
+                <div className={`p-2 rounded-lg ${activeTab === tab.id ? 'bg-white/20' : 'bg-slate-100 dark:bg-white/5'}`}>
+                  {tab.icon}
+                </div>
+                <span>{tab.label}</span>
+              </button>
+            ))}
+          </div>
+        </aside>
+
+        {/* Main Content Area */}
+        <main className="flex-grow min-w-0">
+          <AnimatePresence mode="wait">
+            <motion.div
+              key={activeTab}
+              initial={{ opacity: 0, x: rtl ? 20 : -20 }}
+              animate={{ opacity: 1, x: 0 }}
+              exit={{ opacity: 0, x: rtl ? -20 : 20 }}
+              transition={{ duration: 0.2 }}
+              className="space-y-8"
+            >
+              
+              {/* BASIC INFO SECTION */}
+              {activeTab === 'basic' && (
+                <div className="space-y-6">
+                  <div className="glass-card p-8 border-s-4 border-primary-500">
+                    <div className="flex items-center gap-3 mb-8">
+                      <div className="p-3 bg-primary-500/10 text-primary-500 rounded-2xl"><Zap size={24} /></div>
+                      <div>
+                        <h2 className="text-xl font-black">{rtl ? 'قالب التعبئة السريعة' : 'Quick Template'}</h2>
+                        <p className="text-xs text-slate-500">{rtl ? 'اختر قالب معد مسبقاً لتوفير الوقت' : 'Select a preset template to save time'}</p>
+                      </div>
+                    </div>
+                    <PremiumDropdown value={templateKey} options={templateOptions} rtl={rtl} onChange={applyTemplate} />
+                  </div>
+
+                  <div className="glass-card p-8 group">
+                    <h2 className="text-xl font-black mb-8 flex items-center gap-3">
+                      <div className="w-1.5 h-6 bg-primary-500 rounded-full" />
+                      {rtl ? 'الاسم والوصف' : 'Identity & Description'}
+                    </h2>
+                    <div className="grid md:grid-cols-2 gap-8 mb-8">
+                      <div className="space-y-2">
+                        <label className="text-xs font-black uppercase tracking-widest text-slate-400 ml-1">{rtl ? 'الاسم (عربي)' : 'Product Name (Ar)'}</label>
+                        <input value={formData.name_ar} onChange={e => updateForm('name_ar', e.target.value)} type="text" className="w-full bg-slate-50 dark:bg-[#0a0a0a] border border-slate-200 dark:border-white/5 rounded-2xl p-4 focus:ring-4 focus:ring-primary-500/10 focus:border-primary-500 transition-all outline-none font-bold" />
+                      </div>
+                      <div className="space-y-2">
+                        <label className="text-xs font-black uppercase tracking-widest text-slate-400 ml-1">{rtl ? 'الاسم (إنجليزي)' : 'Product Name (En)'}</label>
+                        <input value={formData.name_en} onChange={e => updateForm('name_en', e.target.value)} type="text" dir="ltr" className="w-full bg-slate-50 dark:bg-[#0a0a0a] border border-slate-200 dark:border-white/5 rounded-2xl p-4 focus:ring-4 focus:ring-primary-500/10 focus:border-primary-500 transition-all outline-none font-bold font-mono" />
+                      </div>
+                    </div>
+                    <div className="grid md:grid-cols-2 gap-8">
+                      <div className="space-y-2">
+                        <label className="text-xs font-black uppercase tracking-widest text-slate-400 ml-1">{rtl ? 'الوصف (عربي)' : 'Rich Description (Ar)'}</label>
+                        <textarea value={formData.description_ar} onChange={e => updateForm('description_ar', e.target.value)} rows={6} className="w-full bg-slate-50 dark:bg-[#0a0a0a] border border-slate-200 dark:border-white/5 rounded-2xl p-4 focus:ring-4 focus:ring-primary-500/10 focus:border-primary-500 transition-all outline-none resize-none" />
+                      </div>
+                      <div className="space-y-2">
+                        <label className="text-xs font-black uppercase tracking-widest text-slate-400 ml-1">{rtl ? 'الوصف (إنجليزي)' : 'Rich Description (En)'}</label>
+                        <textarea value={formData.description_en} onChange={e => updateForm('description_en', e.target.value)} dir="ltr" rows={6} className="w-full bg-slate-50 dark:bg-[#0a0a0a] border border-slate-200 dark:border-white/5 rounded-2xl p-4 focus:ring-4 focus:ring-primary-500/10 focus:border-primary-500 transition-all outline-none resize-none" />
+                      </div>
+                    </div>
+                  </div>
+
+                  <div className="grid md:grid-cols-2 gap-6">
+                    <div className="glass-card p-6 space-y-2">
+                      <label className="text-xs font-black uppercase tracking-widest text-slate-400 ml-1">{rtl ? 'التصنيف الرئيسي' : 'Main Category'}</label>
+                      <PremiumDropdown value={formData.category_id} options={categoryOptions} rtl={rtl} onChange={(v) => updateForm('category_id', v)} />
+                    </div>
+                    <div className="glass-card p-6 space-y-2">
+                      <label className="text-xs font-black uppercase tracking-widest text-slate-400 ml-1">{rtl ? 'الصفحة المستهدفة' : 'Target Store Page'}</label>
+                      <PremiumDropdown value={formData.page_id} options={pageOptions} rtl={rtl} onChange={(v) => updateForm('page_id', v)} />
+                    </div>
+                  </div>
+                </div>
+              )}
+
+              {/* PRICING & INVENTORY SECTION */}
+              {activeTab === 'pricing' && (
+                <div className="space-y-6">
+                  <div className="glass-card p-8">
+                    <h2 className="text-xl font-black mb-8 flex items-center gap-3">
+                      <div className="w-1.5 h-6 bg-emerald-500 rounded-full" />
+                      {rtl ? 'التسعير والمخزون' : 'Core Pricing & Inventory'}
+                    </h2>
+                    <div className="grid md:grid-cols-3 gap-8">
+                      <div className="space-y-2">
+                        <label className="text-xs font-black uppercase tracking-widest text-slate-400 ml-1">{rtl ? 'السعر الحالي' : 'Current Price'}</label>
+                        <div className="relative">
+                          <input value={formData.price} onChange={e => updateForm('price', Number(e.target.value))} type="number" className="w-full bg-slate-50 dark:bg-[#0a0a0a] border border-slate-200 dark:border-white/5 rounded-2xl p-4 pl-12 font-black text-emerald-500 text-xl" />
+                          <span className="absolute left-4 top-1/2 -translate-y-1/2 font-bold text-slate-400">EGP</span>
+                        </div>
+                      </div>
+                      <div className="space-y-2">
+                        <label className="text-xs font-black uppercase tracking-widest text-slate-400 ml-1">{rtl ? 'السعر قبل الخصم' : 'Compare at Price'}</label>
+                        <div className="relative">
+                          <input value={formData.old_price} onChange={e => updateForm('old_price', Number(e.target.value))} type="number" className="w-full bg-slate-50 dark:bg-[#0a0a0a] border border-slate-200 dark:border-white/5 rounded-2xl p-4 pl-12 text-slate-400 line-through" />
+                          <span className="absolute left-4 top-1/2 -translate-y-1/2 font-bold text-slate-400">EGP</span>
+                        </div>
+                      </div>
+                      <div className="space-y-2">
+                        <label className="text-xs font-black uppercase tracking-widest text-slate-400 ml-1">{rtl ? 'الكمية المتاحة' : 'Inventory Stock'}</label>
+                        <div className="relative">
+                          <input value={formData.stock} onChange={e => updateForm('stock', Number(e.target.value))} type="number" className="w-full bg-slate-50 dark:bg-[#0a0a0a] border border-slate-200 dark:border-white/5 rounded-2xl p-4 font-bold text-blue-500" />
+                          <Box className="absolute left-4 top-1/2 -translate-y-1/2 text-slate-300" size={20} />
+                        </div>
+                      </div>
+                    </div>
+                  </div>
+
+                  <div className="glass-card p-8">
+                    <div className="flex items-center justify-between mb-8 border-b border-white/5 pb-4">
+                      <h2 className="text-xl font-black">{rtl ? 'خصومات الكمية' : 'Volume Discounts'}</h2>
+                      <button onClick={addQuantityPrice} className="btn-primary py-2 px-5 text-xs flex items-center gap-2">
+                        <Plus size={16} /> {rtl ? 'إضافة مستوى' : 'Add Tier'}
+                      </button>
+                    </div>
+                    <div className="space-y-4">
+                      {quantityPrices.map((qp, i) => (
+                        <div key={i} className="flex flex-col md:flex-row gap-4 items-center bg-white/5 p-4 rounded-2xl border border-white/5 group">
+                          <div className="flex-1 space-y-1">
+                            <label className="text-[10px] font-black uppercase text-slate-500 ml-1">{rtl ? 'تسمية الكمية' : 'Label (e.g. 500 pcs)'}</label>
+                            <input value={qp.quantity_label} onChange={e => updateQuantityPrice(i, 'quantity_label', e.target.value)} className="w-full bg-black/20 p-3 rounded-xl border border-transparent focus:border-primary-500 outline-none" />
+                          </div>
+                          <div className="w-full md:w-32 space-y-1">
+                            <label className="text-[10px] font-black uppercase text-slate-500 ml-1">{rtl ? 'السعر' : 'Unit Price'}</label>
+                            <input type="number" value={qp.price} onChange={e => updateQuantityPrice(i, 'price', Number(e.target.value))} className="w-full bg-black/20 p-3 rounded-xl border border-transparent focus:border-primary-500 outline-none text-emerald-500 font-bold" />
+                          </div>
+                          <div className="w-full md:w-32 space-y-1">
+                            <label className="text-[10px] font-black uppercase text-slate-500 ml-1">{rtl ? 'السعر القديم' : 'Old Price'}</label>
+                            <input type="number" value={qp.old_price} onChange={e => updateQuantityPrice(i, 'old_price', Number(e.target.value))} className="w-full bg-black/20 p-3 rounded-xl border border-transparent focus:border-primary-500 outline-none text-slate-400 line-through" />
+                          </div>
+                          <button onClick={() => removeQuantityPrice(i)} className="p-3 text-red-500 hover:bg-red-500/10 rounded-xl mt-5 opacity-0 group-hover:opacity-100 transition-all"><Trash2 size={20} /></button>
+                        </div>
+                      ))}
+                    </div>
+                  </div>
+                </div>
+              )}
+
+              {/* MEDIA & ASSETS SECTION */}
+              {activeTab === 'media' && (
+                <div className="space-y-6">
+                  <div className="glass-card p-8">
+                    <h2 className="text-xl font-black mb-8">{rtl ? 'معرض الصور' : 'Visual Gallery'}</h2>
+                    <div className="grid grid-cols-2 md:grid-cols-4 gap-6">
+                      {images.map((img, i) => (
+                        <div key={i} className="relative aspect-square rounded-2xl overflow-hidden border-2 border-white/10 group bg-black/40 shadow-2xl">
+                          <img src={resolveAssetUrl(img)} alt="" className="w-full h-full object-cover group-hover:scale-110 transition-transform duration-500" />
+                          <div className="absolute inset-0 bg-black/40 opacity-0 group-hover:opacity-100 transition-opacity flex items-center justify-center gap-2">
+                             <button onClick={() => removeImage(i)} className="p-2 bg-red-500 text-white rounded-lg hover:bg-red-600 transition shadow-xl"><Trash2 size={16} /></button>
+                             {i === 0 && <span className="absolute top-2 left-2 bg-primary-500 text-white text-[10px] px-2 py-0.5 rounded-full font-black uppercase tracking-tighter">Main</span>}
+                          </div>
+                        </div>
+                      ))}
+                      <button onClick={addImage} className="aspect-square rounded-2xl border-2 border-dashed border-white/10 hover:border-primary-500 hover:bg-primary-500/5 transition-all flex flex-col items-center justify-center gap-2 text-slate-500 hover:text-primary-500">
+                        <div className="p-3 bg-white/5 rounded-full"><Plus size={24} /></div>
+                        <span className="text-xs font-bold">{rtl ? 'إضافة صورة' : 'Add Image'}</span>
+                      </button>
+                    </div>
+                  </div>
+
+                  <div className="glass-card p-8">
+                    <h2 className="text-xl font-black mb-6">{rtl ? 'فيديو المنتج' : 'Video Resource'}</h2>
+                    <div className="space-y-2">
+                      <label className="text-xs font-black uppercase tracking-widest text-slate-400 ml-1">{rtl ? 'رابط الفيديو (Cloudinary URL)' : 'Cloudinary Video URL'}</label>
+                      <input 
+                        value={formData.video_url} 
+                        onChange={e => updateForm('video_url', e.target.value)} 
+                        placeholder="https://res.cloudinary.com/..." 
+                        dir="ltr" 
+                        className="w-full bg-slate-50 dark:bg-[#0a0a0a] border border-slate-200 dark:border-white/5 rounded-2xl p-4 focus:ring-4 focus:ring-primary-500/10 focus:border-primary-500 transition-all outline-none" 
+                      />
+                    </div>
+                  </div>
+                </div>
+              )}
+
+              {/* SPECS & DETAILS SECTION */}
+              {activeTab === 'specs' && (
+                <div className="space-y-6">
+                  <div className="glass-card p-8">
+                    <div className="flex items-center justify-between mb-8">
+                      <h2 className="text-xl font-black">{rtl ? 'النسخ الفعلية للمنتج' : 'Inventory Variants'}</h2>
+                      <button onClick={addVariant} className="btn-primary py-2 px-5 text-xs flex items-center gap-2">
+                        <Plus size={16} /> {rtl ? 'إضافة نسخة' : 'Add Variant'}
+                      </button>
+                    </div>
+                    <div className="space-y-4">
+                      {variants.map((v, i) => (
+                        <div key={i} className="bg-white/5 p-6 rounded-3xl border border-white/5 space-y-6 relative group overflow-hidden">
+                          <div className="grid md:grid-cols-3 gap-6">
+                            <div className="space-y-1">
+                              <label className="text-[10px] font-black uppercase text-slate-500">{rtl ? 'التسمية' : 'Label (e.g. Red, XL)'}</label>
+                              <div className="grid grid-cols-2 gap-2">
+                                <input placeholder="عربي" value={v.label_ar} onChange={e => updateVariant(i, 'label_ar', e.target.value)} className="bg-black/20 p-2.5 rounded-xl border border-transparent focus:border-primary-500 outline-none" />
+                                <input placeholder="En" dir="ltr" value={v.label_en} onChange={e => updateVariant(i, 'label_en', e.target.value)} className="bg-black/20 p-2.5 rounded-xl border border-transparent focus:border-primary-500 outline-none" />
+                              </div>
+                            </div>
+                            <div className="space-y-1">
+                              <label className="text-[10px] font-black uppercase text-slate-500">Price / SKU</label>
+                              <div className="grid grid-cols-2 gap-2">
+                                <input type="number" placeholder="Price" value={v.price} onChange={e => updateVariant(i, 'price', Number(e.target.value))} className="bg-black/20 p-2.5 rounded-xl border border-transparent focus:border-primary-500 outline-none font-bold text-emerald-500" />
+                                <input placeholder="SKU" value={v.sku} onChange={e => updateVariant(i, 'sku', e.target.value)} className="bg-black/20 p-2.5 rounded-xl border border-transparent focus:border-primary-500 outline-none" />
+                              </div>
+                            </div>
+                            <div className="flex gap-4">
+                                <div className="flex-grow space-y-1">
+                                  <label className="text-[10px] font-black uppercase text-slate-500">{rtl ? 'صورة النسخة' : 'Variant Image'}</label>
+                                  <input placeholder="URL" value={v.image_url} onChange={e => updateVariant(i, 'image_url', e.target.value)} className="w-full bg-black/20 p-2.5 rounded-xl border border-transparent focus:border-primary-500 outline-none text-xs" />
+                                </div>
+                                <div className="flex flex-col items-center justify-center p-2">
+                                  <label className="text-[8px] font-black uppercase text-slate-500 mb-1">Def</label>
+                                  <input type="checkbox" checked={v.is_default} onChange={e => updateVariant(i, 'is_default', e.target.checked)} className="w-5 h-5 accent-primary-500" />
+                                </div>
+                                <button onClick={() => removeVariant(i)} className="text-red-500 hover:bg-red-500/10 p-2 mt-4 rounded-xl transition-all"><Trash2 size={18} /></button>
+                            </div>
+                          </div>
+                        </div>
+                      ))}
+                    </div>
+                  </div>
+
+                  <div className="glass-card p-8">
+                    <div className="grid md:grid-cols-2 gap-8 mb-8">
+                      <div className="space-y-2">
+                         <label className="text-xs font-black uppercase tracking-widest text-slate-400 ml-1">{rtl ? 'اختر أبعاد جاهزة' : 'Quick Dimensions'}</label>
+                         <PremiumDropdown value={dimensionsPreset} options={dimensionsPresetOptions} rtl={rtl} onChange={handleDimensionsPresetChange} />
+                      </div>
+                      <div className="space-y-2">
+                        <label className="text-xs font-black uppercase tracking-widest text-slate-400 ml-1">{rtl ? 'العلامة التجارية' : 'Brand Name'}</label>
+                        <div className="grid grid-cols-2 gap-4">
+                          <input placeholder="عربي" value={formData.brand_ar} onChange={e => updateForm('brand_ar', e.target.value)} className="bg-slate-50 dark:bg-[#0a0a0a] border border-slate-200 dark:border-white/5 rounded-2xl p-4 transition-all outline-none" />
+                          <input placeholder="En" dir="ltr" value={formData.brand_en} onChange={e => updateForm('brand_en', e.target.value)} className="bg-slate-50 dark:bg-[#0a0a0a] border border-slate-200 dark:border-white/5 rounded-2xl p-4 transition-all outline-none" />
+                        </div>
+                      </div>
+                    </div>
+
+                    <div className="grid md:grid-cols-2 gap-8 mb-8">
+                       <div className="space-y-2">
+                        <label className="text-xs font-black uppercase tracking-widest text-slate-400 ml-1">{rtl ? 'المادة المصنعة' : 'Product Material'}</label>
+                        <div className="grid grid-cols-2 gap-4">
+                          <input placeholder="عربي" value={formData.material_ar} onChange={e => updateForm('material_ar', e.target.value)} className="bg-slate-50 dark:bg-[#0a0a0a] border border-slate-200 dark:border-white/5 rounded-2xl p-4 transition-all outline-none" />
+                          <input placeholder="En" dir="ltr" value={formData.material_en} onChange={e => updateForm('material_en', e.target.value)} className="bg-slate-50 dark:bg-[#0a0a0a] border border-slate-200 dark:border-white/5 rounded-2xl p-4 transition-all outline-none" />
+                        </div>
+                      </div>
+                      <div className="space-y-2">
+                        <label className="text-xs font-black uppercase tracking-widest text-slate-400 ml-1">{rtl ? 'الأبعاد والقياسات' : 'Physical Dimensions'}</label>
+                        <div className="grid grid-cols-2 gap-4">
+                          <input placeholder="عربي" value={formData.dimensions_ar} onChange={e => updateForm('dimensions_ar', e.target.value)} className="bg-slate-50 dark:bg-[#0a0a0a] border border-slate-200 dark:border-white/5 rounded-2xl p-4 transition-all outline-none" />
+                          <input placeholder="En" dir="ltr" value={formData.dimensions_en} onChange={e => updateForm('dimensions_en', e.target.value)} className="bg-slate-50 dark:bg-[#0a0a0a] border border-slate-200 dark:border-white/5 rounded-2xl p-4 transition-all outline-none" />
+                        </div>
+                      </div>
+                    </div>
+                  </div>
+
+                  <div className="glass-card p-8">
+                    <div className="flex items-center justify-between mb-8">
+                      <h2 className="text-xl font-black">{rtl ? 'المواصفات الفنية' : 'Technical Specifications'}</h2>
+                      <button onClick={addSpec} className="btn-primary py-2 px-5 text-xs flex items-center gap-2">
+                        <Plus size={16} /> {rtl ? 'إضافة مواصفة' : 'Add Spec'}
+                      </button>
+                    </div>
+                    <div className="space-y-4">
+                      {specs.map((s, i) => (
+                        <div key={i} className="grid md:grid-cols-5 gap-4 items-end bg-white/5 p-4 rounded-2xl border border-white/5">
+                           <div className="md:col-span-2 space-y-1">
+                              <label className="text-[10px] font-black uppercase text-slate-500">Key (Ar/En)</label>
+                              <div className="grid grid-cols-2 gap-2">
+                                <input placeholder="جودة الطباعة" value={s.key_ar} onChange={e => updateSpec(i, 'key_ar', e.target.value)} className="bg-black/20 p-2.5 rounded-xl border border-transparent focus:border-primary-500 outline-none" />
+                                <input placeholder="Print Quality" dir="ltr" value={s.key_en} onChange={e => updateSpec(i, 'key_en', e.target.value)} className="bg-black/20 p-2.5 rounded-xl border border-transparent focus:border-primary-500 outline-none font-mono" />
+                              </div>
+                           </div>
+                           <div className="md:col-span-2 space-y-1">
+                              <label className="text-[10px] font-black uppercase text-slate-500">Value (Ar/En)</label>
+                              <div className="grid grid-cols-2 gap-2">
+                                <input placeholder="عالية" value={s.val_ar} onChange={e => updateSpec(i, 'val_ar', e.target.value)} className="bg-black/20 p-2.5 rounded-xl border border-transparent focus:border-primary-500 outline-none" />
+                                <input placeholder="High" dir="ltr" value={s.val_en} onChange={e => updateSpec(i, 'val_en', e.target.value)} className="bg-black/20 p-2.5 rounded-xl border border-transparent focus:border-primary-500 outline-none" />
+                              </div>
+                           </div>
+                           <button onClick={() => removeSpec(i)} className="bg-red-500/10 text-red-500 p-2.5 rounded-xl flex items-center justify-center hover:bg-red-500 hover:text-white transition-all"><Trash2 size={20} /></button>
+                        </div>
+                      ))}
+                    </div>
+                  </div>
+                </div>
+              )}
+
+              {/* SHIPPING & WARRANTY SECTION */}
+              {activeTab === 'shipping' && (
+                <div className="space-y-6">
+                  <div className="glass-card p-8">
+                    <h2 className="text-xl font-black mb-8 flex items-center gap-3">
+                      <div className="w-1.5 h-6 bg-blue-500 rounded-full" />
+                      {rtl ? 'الشحن والتوصيل' : 'Logistics & Shipping'}
+                    </h2>
+                    <div className="grid md:grid-cols-2 gap-8">
+                      <div className="space-y-2">
+                        <label className="text-xs font-black uppercase tracking-widest text-slate-400 ml-1">{rtl ? 'معلومات الشحن (عربي)' : 'Shipping Info (Ar)'}</label>
+                        <textarea value={formData.shipping_info_ar} onChange={e => updateForm('shipping_info_ar', e.target.value)} rows={4} className="w-full bg-slate-50 dark:bg-[#0a0a0a] border border-slate-200 dark:border-white/5 rounded-2xl p-4 outline-none transition-all focus:border-primary-500" />
+                      </div>
+                      <div className="space-y-2">
+                        <label className="text-xs font-black uppercase tracking-widest text-slate-400 ml-1">{rtl ? 'معلومات الشحن (إنجليزي)' : 'Shipping Info (En)'}</label>
+                        <textarea value={formData.shipping_info_en} onChange={e => updateForm('shipping_info_en', e.target.value)} dir="ltr" rows={4} className="w-full bg-slate-50 dark:bg-[#0a0a0a] border border-slate-200 dark:border-white/5 rounded-2xl p-4 outline-none transition-all focus:border-primary-500" />
+                      </div>
+                    </div>
+                  </div>
+
+                  <div className="glass-card p-8">
+                    <h2 className="text-xl font-black mb-8">{rtl ? 'سياسة الضمان والاسترجاع' : 'Warranty & Returns'}</h2>
+                    <div className="grid md:grid-cols-2 gap-8">
+                      <div className="space-y-2">
+                        <label className="text-xs font-black uppercase tracking-widest text-slate-400 ml-1">{rtl ? 'الضمان (عربي)' : 'Warranty Policy (Ar)'}</label>
+                        <textarea value={formData.warranty_info_ar} onChange={e => updateForm('warranty_info_ar', e.target.value)} rows={4} className="w-full bg-slate-50 dark:bg-[#0a0a0a] border border-slate-200 dark:border-white/5 rounded-2xl p-4 outline-none transition-all focus:border-primary-500" />
+                      </div>
+                      <div className="space-y-2">
+                        <label className="text-xs font-black uppercase tracking-widest text-slate-400 ml-1">{rtl ? 'الضمان (إنجليزي)' : 'Warranty Policy (En)'}</label>
+                        <textarea value={formData.warranty_info_en} onChange={e => updateForm('warranty_info_en', e.target.value)} dir="ltr" rows={4} className="w-full bg-slate-50 dark:bg-[#0a0a0a] border border-slate-200 dark:border-white/5 rounded-2xl p-4 outline-none transition-all focus:border-primary-500" />
+                      </div>
+                    </div>
+                  </div>
+
+                  <div className="grid md:grid-cols-2 gap-6">
+                    <div className="glass-card p-8">
+                      <h3 className="font-black mb-4">{rtl ? 'مواصفات الكرتونة' : 'Carton Details'}</h3>
+                      <div className="space-y-4">
+                        <input placeholder="عربي" value={formData.carton_details_ar} onChange={e => updateForm('carton_details_ar', e.target.value)} className="w-full bg-slate-50 dark:bg-[#0a0a0a] border border-white/5 rounded-xl p-3 outline-none" />
+                        <input placeholder="En" dir="ltr" value={formData.carton_details_en} onChange={e => updateForm('carton_details_en', e.target.value)} className="w-full bg-slate-50 dark:bg-[#0a0a0a] border border-white/5 rounded-xl p-3 outline-none" />
+                      </div>
+                    </div>
+                    <div className="glass-card p-8">
+                      <h3 className="font-black mb-4">{rtl ? 'ملاحظات الاستخدام' : 'Usage Guidelines'}</h3>
+                      <div className="space-y-4">
+                        <input placeholder="عربي" value={formData.usage_notes_ar} onChange={e => updateForm('usage_notes_ar', e.target.value)} className="w-full bg-slate-50 dark:bg-[#0a0a0a] border border-white/5 rounded-xl p-3 outline-none" />
+                        <input placeholder="En" dir="ltr" value={formData.usage_notes_en} onChange={e => updateForm('usage_notes_en', e.target.value)} className="w-full bg-slate-50 dark:bg-[#0a0a0a] border border-white/5 rounded-xl p-3 outline-none" />
+                      </div>
+                    </div>
+                  </div>
+                </div>
+              )}
+
+              {/* RELATIONS & FAQ SECTION */}
+              {activeTab === 'relations' && (
+                <div className="space-y-6">
+                  <div className="glass-card p-8">
+                    <div className="flex items-center justify-between mb-8">
+                      <h2 className="text-xl font-black">{rtl ? 'الأسئلة الشائعة' : 'Frequently Asked Questions'}</h2>
+                      <button onClick={addFaq} className="btn-primary py-2 px-5 text-xs flex items-center gap-2">
+                        <Plus size={16} /> {rtl ? 'إضافة سؤال' : 'Add Question'}
+                      </button>
+                    </div>
+                    <div className="space-y-6">
+                      {faqs.map((faq, i) => (
+                        <div key={i} className="bg-white/5 p-6 rounded-3xl border border-white/5 flex gap-4 transition-all hover:bg-white/10 group">
+                           <div className="flex-grow space-y-4">
+                              <div className="grid md:grid-cols-2 gap-4">
+                                <div className="space-y-1">
+                                  <label className="text-[10px] font-black uppercase text-slate-500">{rtl ? 'السؤال (عربي)' : 'Question (Ar)'}</label>
+                                  <input value={faq.question_ar} onChange={e => updateFaq(i, 'question_ar', e.target.value)} className="w-full bg-black/20 p-3 rounded-xl outline-none" />
+                                </div>
+                                <div className="space-y-1">
+                                  <label className="text-[10px] font-black uppercase text-slate-500">{rtl ? 'السؤال (إنجليزي)' : 'Question (En)'}</label>
+                                  <input value={faq.question_en} onChange={e => updateFaq(i, 'question_en', e.target.value)} dir="ltr" className="w-full bg-black/20 p-3 rounded-xl outline-none" />
+                                </div>
+                              </div>
+                              <div className="grid md:grid-cols-2 gap-4">
+                                <div className="space-y-1">
+                                  <label className="text-[10px] font-black uppercase text-slate-500">{rtl ? 'الإجابة (عربي)' : 'Answer (Ar)'}</label>
+                                  <textarea rows={2} value={faq.answer_ar} onChange={e => updateFaq(i, 'answer_ar', e.target.value)} className="w-full bg-black/20 p-3 rounded-xl outline-none" />
+                                </div>
+                                <div className="space-y-1">
+                                  <label className="text-[10px] font-black uppercase text-slate-500">{rtl ? 'الإجابة (إنجليزي)' : 'Answer (En)'}</label>
+                                  <textarea rows={2} value={faq.answer_en} onChange={e => updateFaq(i, 'answer_en', e.target.value)} dir="ltr" className="w-full bg-black/20 p-3 rounded-xl outline-none" />
+                                </div>
+                              </div>
+                           </div>
+                           <button onClick={() => removeFaq(i)} className="text-red-500 p-2 opacity-0 group-hover:opacity-100 transition-all"><Trash2 size={22} /></button>
+                        </div>
+                      ))}
+                    </div>
+                  </div>
+
+                  <div className="glass-card p-8">
+                    <h2 className="text-xl font-black mb-8">{rtl ? 'منتجات مرتبطة (FBT)' : 'Frequently Bought Together'}</h2>
+                    <div className="relative mb-8">
+                      <div className="flex gap-4">
+                        <input 
+                          value={fbtSearch} 
+                          onChange={e => setFbtSearch(e.target.value)} 
+                          onKeyDown={e => e.key === 'Enter' && (e.preventDefault(), handleFbtSearch())}
+                          placeholder={rtl ? 'ابحث عن منتج بالاسم...' : 'Search for products by name...'}
+                          className="flex-grow bg-slate-50 dark:bg-[#0a0a0a] border border-slate-200 dark:border-white/5 rounded-2xl p-4 outline-none focus:border-primary-500"
+                        />
+                        <button onClick={handleFbtSearch} disabled={searchingFbt} className="btn-primary w-24">
+                          {searchingFbt ? <Loader2 className="animate-spin" size={20} /> : <Search size={20} />}
+                        </button>
+                      </div>
+
+                      {fbtResults.length > 0 && (
+                        <div className="absolute top-[calc(100%+8px)] left-0 right-0 z-50 glass-card p-2 max-h-[300px] overflow-y-auto shadow-2xl space-y-1">
+                          {fbtResults.map(p => (
+                            <button key={p.id} onClick={() => addFbt(p)} className="w-full flex items-center gap-4 p-3 hover:bg-primary-500/10 rounded-xl transition-all border border-transparent hover:border-primary-500/20">
+                              <img src={resolveAssetUrl(p.image_url)} alt="" className="w-10 h-10 rounded-lg object-cover" />
+                              <div className="flex-grow text-start">
+                                <p className="font-bold text-sm">{rtl ? p.name_ar : p.name_en}</p>
+                                <p className="text-xs text-primary-500 font-bold">{p.price} EGP</p>
+                              </div>
+                              <Plus size={16} className="text-primary-500" />
+                            </button>
+                          ))}
+                        </div>
+                      )}
+                    </div>
+
+                    <div className="grid gap-4">
+                      {fbtProductDetails.map(p => (
+                        <div key={p.id} className="flex items-center gap-6 bg-white/5 p-4 rounded-3xl border border-white/5 group">
+                          <img src={resolveAssetUrl(p.image_url)} alt="" className="w-16 h-16 rounded-2xl object-cover" />
+                          <div className="flex-grow">
+                             <p className="font-black">{rtl ? p.name_ar : p.name_en}</p>
+                             <p className="text-sm text-slate-500 font-bold">{p.price} EGP</p>
+                          </div>
+                          <button onClick={() => removeFbt(p.id)} className="text-red-500 p-3 opacity-0 group-hover:opacity-100 transition-all"><Trash2 size={24} /></button>
+                        </div>
+                      ))}
+                    </div>
+                  </div>
+                </div>
+              )}
+            </motion.div>
+          </AnimatePresence>
+        </main>
+      </div>
+
+      {/* Floating Action Bar */}
+      <footer className="fixed bottom-8 left-1/2 -translate-x-1/2 z-[100] w-[calc(100%-2rem)] max-w-4xl">
+        <div className="glass-card p-4 flex items-center justify-between gap-6 shadow-3xl shadow-black/50 border border-white/10 border-t-white/20">
+          <div className="flex hide-mobile items-center gap-4">
+            <div className="w-12 h-12 bg-primary-500/10 text-primary-500 rounded-2xl flex items-center justify-center font-black text-xs uppercase">
+              {activeTab[0]}
+            </div>
+            <div>
+              <p className="text-[10px] font-black text-slate-500 uppercase tracking-widest leading-none mb-1">{rtl ? 'القسم الحالي' : 'Current Editor'}</p>
+              <p className="font-black text-sm text-slate-900 dark:text-white leading-none">
+                {sidebarTabs.find(t => t.id === activeTab)?.label}
+              </p>
+            </div>
+          </div>
+          
+          <div className="flex items-center gap-3 flex-grow md:flex-grow-0">
+            <Link to="/admin/products" className="btn-secondary py-3 px-8 text-sm font-black">{rtl ? 'إلغاء' : 'Discard'}</Link>
+            <button 
+              onClick={saveProduct} 
+              disabled={loading} 
+              className="btn-primary py-3 px-12 flex items-center justify-center gap-3 font-black text-sm shadow-xl shadow-primary-500/20 flex-grow md:flex-grow-0"
+            >
+              {loading ? <Loader2 size={18} className="animate-spin" /> : <Save size={18} />}
+              {rtl ? 'حفظ المنتج النهائي' : 'Commit & Save Product'}
+            </button>
+          </div>
+        </div>
+      </footer>
+    </div>
+  );
+}
+

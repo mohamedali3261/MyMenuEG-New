@@ -1,0 +1,35 @@
+node_modules
+
+# Keep environment variables out of version control
+.env
+.env.local
+.env.*.local
+
+# Prisma generated files
+/generated/prisma
+
+# Build output
+../dist-server
+
+# Logs
+*.log
+npm-debug.log*
+logs/
+
+# Backup files
+../../../backups/
+
+# Temporary files
+*.tmp
+*.temp
+temp_uploads/
+
+# IDE
+.idea/
+.vscode/
+*.swp
+*.swo
+
+# OS files
+.DS_Store
+Thumbs.db
