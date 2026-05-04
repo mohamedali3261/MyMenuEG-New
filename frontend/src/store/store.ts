@@ -5,6 +5,19 @@ import { api } from '../api'
 let refreshBlockedUntilMs = 0;
 let isFetchingInitialData = false;
 let isFetchingSettings = false;
+let cartSyncTimer: ReturnType<typeof setTimeout> | null = null;
+let isLoadingCustomerData = false;
+
+interface Customer {
+  id: string;
+  email: string;
+  name: string | null;
+  phone: string | null;
+  governorate: string | null;
+  city: string | null;
+  address: string | null;
+  avatar: string | null;
+}
 
 interface CartItem {
   id: string
@@ -15,6 +28,16 @@ interface CartItem {
   variant?: string
   custom_file_url?: string
   custom_notes?: string
+  is_bundle?: boolean
+  bundle_items?: Array<{
+    product_id: string;
+    quantity: number;
+    discount?: number;
+    name_ar?: string;
+    name_en?: string;
+    price: number;
+    image_url?: string;
+  }>
 }
 
 interface Product {
@@ -104,12 +127,14 @@ interface StorePage {
   is_dynamic: boolean | number;
   status?: string;
   order_index?: number;
+  image_url?: string;
 }
 
 interface AdminUser {
   id: string;
   username: string;
   is_super_admin: boolean;
+  is_active?: boolean;
   permissions: string[];
 }
 
@@ -127,6 +152,7 @@ interface NotificationItem {
   message_ar: string;
   message_en: string;
   created_at: string;
+  source?: 'order' | 'customer';
 }
 
 interface AppState {
@@ -135,6 +161,7 @@ interface AppState {
   cardStyle: 'classic' | 'floating' | 'minimal' | 'reveal' | 'modern'
   cardHoverAnimation: 'zoom' | 'lift' | 'glow' | 'none'
   backgroundStyle: 'blobs' | 'grid' | 'cinema' | 'default'
+  bundleCardStyle: 'A' | 'B' | 'C' | 'D'
   toastMessage: { text: string; type: 'success' | 'error' } | null
   showToast: (text: string, type?: 'success' | 'error') => void
   hideToast: () => void
@@ -143,10 +170,11 @@ interface AppState {
   setCardStyle: (style: 'classic' | 'floating' | 'minimal' | 'reveal' | 'modern') => void
   setCardHoverAnimation: (animation: 'zoom' | 'lift' | 'glow' | 'none') => void
   setBackgroundStyle: (style: 'blobs' | 'grid' | 'cinema' | 'default') => void
+  setBundleCardStyle: (style: 'A' | 'B' | 'C' | 'D') => void
   cart: CartItem[]
   addToCart: (item: CartItem) => void
-  removeFromCart: (id: string, variant?: string) => void
-  decreaseQuantity: (id: string, variant?: string) => void
+  removeFromCart: (id: string, variant?: string, isBundle?: boolean) => void
+  decreaseQuantity: (id: string, variant?: string, isBundle?: boolean) => void
   clearCart: () => void
 
   // Core Data
@@ -167,6 +195,7 @@ interface AppState {
     storeName: string;
     logoUrl: string;
     currency: string;
+    navbarStyle: 'variant1' | 'variant2' | 'variant3';
   }
   updateBranding: (branding: Partial<AppState['branding']>) => void
 
@@ -183,12 +212,13 @@ interface AppState {
   refreshSession: () => Promise<void>;
   login: (credentials: { username: string; password: string }) => Promise<boolean>;
   logout: () => Promise<void>;
-  
+  register: (data: { username: string; password: string; email?: string }) => Promise<{ success: boolean; error?: string; message?: string }>;
+
   // Admins Management (Super Admin)
   admins: AdminUser[];
   fetchAdmins: () => Promise<void>;
   addAdmin: (data: { username: string; password: string; is_super_admin?: boolean; permissions: string[] }) => Promise<{ success: boolean; error?: string }>;
-  updateAdmin: (id: string, data: Partial<{ username: string; password: string; is_super_admin: boolean; permissions: string[] }>) => Promise<{ success: boolean; error?: string }>;
+  updateAdmin: (id: string, data: Partial<{ username: string; password: string; is_super_admin: boolean; is_active: boolean; permissions: string[] }>) => Promise<{ success: boolean; error?: string }>;
   deleteAdmin: (id: string) => Promise<boolean>;
 
   // Loading Screen State
@@ -259,6 +289,16 @@ interface AppState {
   };
   updatePaymentSettings: (settings: Partial<AppState['paymentSettings']>) => void;
 
+  // Shipping Settings
+  shippingSettings: {
+    freeShippingEnabled: boolean;
+    freeShippingMinOrder: number;
+    flatRateShipping: number;
+    governorateRates: Record<string, number>;
+  };
+  updateShippingSettings: (settings: Partial<AppState['shippingSettings']>) => void;
+  getShippingCost: (governorate: string, subtotal: number) => number;
+
   // Tracked Orders & Notifications
   trackedOrders: string[];
   trackedOrderPhones: Record<string, string>;
@@ -266,6 +306,22 @@ interface AppState {
   notifications: NotificationItem[];
   fetchNotifications: () => Promise<void>;
   markNotificationsAsRead: () => Promise<void>;
+
+  // Sidebar badge refresh trigger
+  sidebarBadgeVersion: number;
+  refreshSidebarBadges: () => void;
+
+  // Customer Google Auth
+  customer: Customer | null;
+  customerToken: string | null;
+  googleLoginEnabled: boolean;
+  googleClientId: string;
+  setCustomer: (customer: Customer | null, token: string | null) => void;
+  logoutCustomer: () => void;
+  fetchGoogleLoginSettings: () => Promise<void>;
+  loadCustomerData: () => Promise<void>;
+  syncCartToDB: () => Promise<void>;
+  syncWishlistToDB: () => Promise<void>;
 }
 
 export const useStore = create<AppState>()(
@@ -276,6 +332,7 @@ export const useStore = create<AppState>()(
       cardStyle: 'floating',
       cardHoverAnimation: 'zoom',
       backgroundStyle: 'blobs',
+      bundleCardStyle: 'A',
       toastMessage: null,
       showToast: (text, type = 'success') => {
         set({ toastMessage: { text, type } })
@@ -287,25 +344,41 @@ export const useStore = create<AppState>()(
       setCardStyle: (style) => set({ cardStyle: style }),
       setCardHoverAnimation: (animation) => set({ cardHoverAnimation: animation }),
       setBackgroundStyle: (style) => set({ backgroundStyle: style }),
+      setBundleCardStyle: (style) => set({ bundleCardStyle: style }),
       cart: [],
-      addToCart: (item) => set((state) => {
-        const existing = state.cart.find(i => i.id === item.id && i.variant === item.variant)
-        if (existing) {
-          return { cart: state.cart.map(i => (i.id === item.id && i.variant === item.variant) ? { ...i, quantity: i.quantity + item.quantity, image: item.image || i.image } : i) }
-        }
-        return { cart: [...state.cart, item] }
-      }),
-      removeFromCart: (id, variant) => set((state) => ({ 
-        cart: state.cart.filter(i => !(i.id === id && i.variant === variant)) 
-      })),
-      decreaseQuantity: (id, variant) => set((state) => {
-        const item = state.cart.find(i => i.id === id && i.variant === variant);
-        if (item && item.quantity > 1) {
-          return { cart: state.cart.map(i => (i.id === id && i.variant === variant) ? { ...i, quantity: i.quantity - 1 } : i) };
-        }
-        return { cart: state.cart.filter(i => !(i.id === id && i.variant === variant)) };
-      }),
-      clearCart: () => set({ cart: [] }),
+      addToCart: (item) => {
+        const itemBundle = item.is_bundle || false;
+        set((state) => {
+          const existing = state.cart.find(i => i.id === item.id && i.variant === item.variant && (i.is_bundle || false) === itemBundle)
+          if (existing) {
+            return { cart: state.cart.map(i => (i.id === item.id && i.variant === item.variant && (i.is_bundle || false) === itemBundle) ? { ...i, quantity: i.quantity + item.quantity, image: item.image || i.image, is_bundle: i.is_bundle, bundle_items: i.bundle_items } : i) }
+          }
+          return { cart: [...state.cart, item] }
+        });
+        get().syncCartToDB();
+      },
+      removeFromCart: (id, variant, isBundle?: boolean) => {
+        const isBundleNorm = isBundle || false;
+        set((state) => ({
+          cart: state.cart.filter(i => !(i.id === id && i.variant === variant && (i.is_bundle || false) === isBundleNorm))
+        }));
+        get().syncCartToDB();
+      },
+      decreaseQuantity: (id, variant, isBundle?: boolean) => {
+        const isBundleNorm = isBundle || false;
+        set((state) => {
+          const item = state.cart.find(i => i.id === id && i.variant === variant && (i.is_bundle || false) === isBundleNorm);
+          if (item && item.quantity > 1) {
+            return { cart: state.cart.map(i => (i.id === id && i.variant === variant && (i.is_bundle || false) === isBundleNorm) ? { ...i, quantity: i.quantity - 1 } : i) };
+          }
+          return { cart: state.cart.filter(i => !(i.id === id && i.variant === variant && (i.is_bundle || false) === isBundleNorm)) };
+        });
+        get().syncCartToDB();
+      },
+      clearCart: () => {
+        set({ cart: [] });
+        get().syncCartToDB();
+      },
       
       // Core Data Implementation
       products: [],
@@ -334,6 +407,11 @@ export const useStore = create<AppState>()(
             pages: pageRes.data,
             isDataLoaded: true 
           });
+
+          // Load customer cart/wishlist from DB if logged in
+          if (get().customerToken) {
+            get().loadCustomerData();
+          }
         } catch (error) {
           console.error('Failed to fetch initial data:', error);
         } finally {
@@ -372,7 +450,8 @@ export const useStore = create<AppState>()(
         lightBgColor: '#e2e8f0',
         storeName: 'MyMenuEG',
         logoUrl: '',
-        currency: 'EGP'
+        currency: 'EGP',
+        navbarStyle: 'variant1'
       },
       updateBranding: (newBranding) => set((state) => ({
         branding: { ...state.branding, ...newBranding }
@@ -450,15 +529,41 @@ export const useStore = create<AppState>()(
         paymentSettings: { ...state.paymentSettings, ...newSettings }
       })),
 
+      // Shipping Settings
+      shippingSettings: {
+        freeShippingEnabled: true,
+        freeShippingMinOrder: 0,
+        flatRateShipping: 0,
+        governorateRates: {}
+      },
+      updateShippingSettings: (newSettings) => set((state) => ({
+        shippingSettings: { ...state.shippingSettings, ...newSettings }
+      })),
+      getShippingCost: (governorate, subtotal) => {
+        const s = get().shippingSettings;
+        if (s.freeShippingEnabled && s.freeShippingMinOrder > 0 && subtotal >= s.freeShippingMinOrder) return 0;
+        if (s.freeShippingEnabled && s.freeShippingMinOrder === 0) return 0;
+        if (s.governorateRates[governorate] !== undefined) return s.governorateRates[governorate];
+        return s.flatRateShipping;
+      },
+
       // Wishlist Implementation
       wishlist: [],
-      toggleWishlist: (product) => set((state) => {
+      toggleWishlist: (product) => {
+        const state = get();
         const index = state.wishlist.findIndex(p => p.id === product.id);
         if (index > -1) {
-           return { wishlist: state.wishlist.filter(p => p.id !== product.id) };
+          set({ wishlist: state.wishlist.filter(p => p.id !== product.id) });
+          if (state.customerToken) {
+            api.delete(`/customer-data/wishlist/${product.id}`).catch(() => {});
+          }
+        } else {
+          set({ wishlist: [...state.wishlist, product] });
+          if (state.customerToken) {
+            api.post('/customer-data/wishlist', { product_id: product.id }).catch(() => {});
+          }
         }
-        return { wishlist: [...state.wishlist, product] };
-      }),
+      },
 
       // Auth Implementation
       user: null,
@@ -505,47 +610,260 @@ export const useStore = create<AppState>()(
         }
         set({ user: null, token: null, authChecked: true });
       },
+      register: async (data) => {
+        try {
+          const res = await api.post('/auth/register', data);
+          return { success: true, message: res.data.message };
+        } catch (error: any) {
+          return { success: false, error: error.response?.data?.error || 'Registration failed' };
+        }
+      },
 
       // Tracked Orders & Notifications
       trackedOrders: [],
       trackedOrderPhones: {},
-      addTrackedOrder: (orderId, customerPhone) => set((state) => {
-        const nextPhones = { ...state.trackedOrderPhones };
-        if (customerPhone && customerPhone.trim()) {
-          nextPhones[orderId] = customerPhone.trim();
-        }
-        if (!state.trackedOrders.includes(orderId)) {
-          return {
-            trackedOrders: [...state.trackedOrders, orderId],
-            trackedOrderPhones: nextPhones
-          };
-        }
-        return { trackedOrderPhones: nextPhones };
-      }),
+      addTrackedOrder: (orderId, customerPhone) => {
+        set((state) => {
+          const nextPhones = { ...state.trackedOrderPhones };
+          if (customerPhone && customerPhone.trim()) {
+            nextPhones[orderId] = customerPhone.trim();
+          }
+          if (!state.trackedOrders.includes(orderId)) {
+            return {
+              trackedOrders: [...state.trackedOrders, orderId],
+              trackedOrderPhones: nextPhones
+            };
+          }
+          return { trackedOrderPhones: nextPhones };
+        });
+        // Trigger notification fetch after adding a tracked order
+        get().fetchNotifications();
+      },
       notifications: [],
       fetchNotifications: async () => {
         const orderIds = get().trackedOrders;
-        if (orderIds.length === 0) return;
-        try {
-          const trackedOrderPhones = get().trackedOrderPhones || {};
-          const customerPhone = trackedOrderPhones[orderIds[orderIds.length - 1]];
-          const res = await api.post('/notifications/customer', { orderIds, customerPhone });
-          set({ notifications: res.data });
-        } catch (err) {
-          console.error('Failed to fetch notifications', err);
+        const customerToken = get().customerToken;
+        const allNotifications: NotificationItem[] = [];
+
+        // Fetch order status notifications
+        if (orderIds.length > 0 && customerToken) {
+          try {
+            const trackedOrderPhones = get().trackedOrderPhones || {};
+            const customerPhone = trackedOrderPhones[orderIds[orderIds.length - 1]];
+            const res = await api.post('/notifications/customer', { orderIds, customerPhone });
+            const orderNotifs = (res.data || []).map((n: NotificationItem) => ({ ...n, source: 'order' as const }));
+            allNotifications.push(...orderNotifs);
+          } catch (err) {
+            const status = (err as any)?.response?.status;
+            if (status !== 401) {
+              console.error('Failed to fetch order notifications', err);
+            }
+          }
         }
+
+        // Fetch customer notifications (from admin)
+        if (customerToken) {
+          try {
+            const res = await api.get('/customers/me/notifications');
+            const customerNotifs = (res.data.notifications || []).map((n: any) => ({
+              id: n.id,
+              is_read: n.is_read,
+              type: 'customer',
+              title_ar: n.title,
+              title_en: n.title,
+              message_ar: n.message,
+              message_en: n.message,
+              created_at: n.created_at,
+              source: 'customer' as const,
+            }));
+            allNotifications.push(...customerNotifs);
+          } catch (err) {
+            const status = (err as any)?.response?.status;
+            if (status !== 401) {
+              console.error('Failed to fetch customer notifications', err);
+            }
+          }
+        }
+
+        // Sort by date descending
+        allNotifications.sort((a, b) => new Date(b.created_at).getTime() - new Date(a.created_at).getTime());
+        set({ notifications: allNotifications });
       },
       markNotificationsAsRead: async () => {
         const orderIds = get().trackedOrders;
-        if (orderIds.length === 0) return;
+        const customerToken = get().customerToken;
+
+        // Mark order notifications as read
+        if (orderIds.length > 0 && customerToken) {
+          try {
+            const trackedOrderPhones = get().trackedOrderPhones || {};
+            const customerPhone = trackedOrderPhones[orderIds[orderIds.length - 1]];
+            await api.put('/notifications/read', { orderIds, customerPhone });
+          } catch (err) {
+            const status = (err as any)?.response?.status;
+            if (status !== 401) {
+              console.error('Failed to mark order notifications read', err);
+            }
+          }
+        }
+
+        // Mark customer notifications as read
+        if (customerToken) {
+          try {
+            await api.patch('/customers/me/notifications/read-all');
+          } catch (err) {
+            console.error('Failed to mark customer notifications read', err);
+          }
+        }
+
+        const updated = get().notifications.map(n => ({ ...n, is_read: true }));
+        set({ notifications: updated });
+      },
+
+      // Sidebar badge refresh trigger
+      sidebarBadgeVersion: 0,
+      refreshSidebarBadges: () => set((s) => ({ sidebarBadgeVersion: s.sidebarBadgeVersion + 1 })),
+
+      // Customer Google Auth
+      customer: null,
+      customerToken: null,
+      googleLoginEnabled: false,
+      googleClientId: '',
+      setCustomer: (customer, token) => set({ customer, customerToken: token }),
+      logoutCustomer: () => {
+        set({ customer: null, customerToken: null, wishlist: [], cart: [] });
+      },
+      fetchGoogleLoginSettings: async () => {
         try {
-          const trackedOrderPhones = get().trackedOrderPhones || {};
-          const customerPhone = trackedOrderPhones[orderIds[orderIds.length - 1]];
-          await api.put('/notifications/read', { orderIds, customerPhone });
-          const updated = get().notifications.map(n => ({ ...n, is_read: true }));
-          set({ notifications: updated });
+          const res = await api.get('/auth/settings');
+          set({
+            googleLoginEnabled: res.data.google_login_enabled === 'true',
+            googleClientId: res.data.google_client_id || ''
+          });
+        } catch (error) {
+          console.warn('Failed to fetch Google login settings', error);
+        }
+      },
+
+      loadCustomerData: async () => {
+        const { customerToken } = get();
+        if (!customerToken || isLoadingCustomerData) return;
+        isLoadingCustomerData = true;
+        try {
+          // Wait for products to be loaded first
+          let retries = 0;
+          while (!get().isDataLoaded && retries < 20) {
+            await new Promise(r => setTimeout(r, 300));
+            retries++;
+          }
+          if (!get().isDataLoaded) return;
+          const { products, cart: localCart, wishlist: localWishlist } = get();
+          const [wishlistRes, cartRes] = await Promise.all([
+            api.get('/customer-data/wishlist'),
+            api.get('/customer-data/cart'),
+          ]);
+
+          // Build wishlist from product_ids and merge with local
+          const dbWishlistIds = (wishlistRes.data.items || []).map((i: any) => i.product_id);
+          const dbWishlistProducts = products.filter(p => dbWishlistIds.includes(p.id));
+          const mergedWishlist = [...dbWishlistProducts];
+          for (const localItem of localWishlist) {
+            if (!mergedWishlist.find(p => p.id === localItem.id)) {
+              mergedWishlist.push(localItem);
+            }
+          }
+          set({ wishlist: mergedWishlist });
+          // Sync any new local wishlist items to DB
+          if (localWishlist.length > 0) {
+            for (const item of localWishlist) {
+              if (!dbWishlistIds.includes(item.id)) {
+                api.post('/customer-data/wishlist', { product_id: item.id }).catch(() => {});
+              }
+            }
+          }
+
+          // Build cart from DB items (skip deleted products)
+          const dbCartItems = (cartRes.data.items || []).map((i: any) => {
+            const product = products.find(p => p.id === i.product_id);
+            if (!product) return null; // Product was deleted
+            let bundleItems: any[] = [];
+            if (i.bundle_data) {
+              try {
+                bundleItems = JSON.parse(i.bundle_data);
+              } catch (error) {
+                console.warn('Failed to parse cart bundle_data JSON', error);
+              }
+            }
+            return {
+              id: i.product_id,
+              name: get().rtl ? product.name_ar : product.name_en,
+              price: product.price,
+              quantity: i.quantity,
+              image: product.image_url || '',
+              variant: i.variant || undefined,
+              is_bundle: i.is_bundle || false,
+              bundle_items: bundleItems.length > 0 ? bundleItems : undefined,
+            };
+          }).filter(Boolean) as any[];
+
+          // Merge local cart with DB cart (local items take precedence on conflict)
+          const merged = [...dbCartItems];
+          for (const localItem of localCart) {
+            const localBundle = localItem.is_bundle || false;
+            const idx = merged.findIndex(i => i.id === localItem.id && i.variant === localItem.variant && (i.is_bundle || false) === localBundle);
+            if (idx > -1) {
+              merged[idx] = { ...merged[idx], quantity: merged[idx].quantity + localItem.quantity };
+            } else {
+              merged.push(localItem);
+            }
+          }
+          set({ cart: merged });
+          // Sync merged cart back to DB
+          if (localCart.length > 0) {
+            get().syncCartToDB();
+          }
         } catch (err) {
-           console.error('Failed to mark read', err);
+          console.error('Failed to load customer data', err);
+        } finally {
+          isLoadingCustomerData = false;
+        }
+      },
+
+      syncCartToDB: async () => {
+        if (cartSyncTimer) clearTimeout(cartSyncTimer);
+        cartSyncTimer = setTimeout(async () => {
+          const { customerToken, cart } = get();
+          if (!customerToken) return;
+          try {
+            const items = cart.map(item => ({
+              product_id: item.id,
+              variant: item.variant || '',
+              quantity: item.quantity,
+              is_bundle: item.is_bundle || false,
+              bundle_data: item.bundle_items ? JSON.stringify(item.bundle_items) : null,
+            }));
+            await api.post('/customer-data/cart/sync', { items });
+          } catch (err) {
+            console.error('Failed to sync cart', err);
+          }
+        }, 500);
+      },
+
+      syncWishlistToDB: async () => {
+        const { customerToken, wishlist } = get();
+        if (!customerToken) return;
+        try {
+          // Delete all then re-add (same approach as cart sync)
+          const existingRes = await api.get('/customer-data/wishlist');
+          const existingIds = (existingRes.data.items || []).map((i: any) => i.product_id);
+          for (const pid of existingIds) {
+            await api.delete(`/customer-data/wishlist/${pid}`);
+          }
+          for (const item of wishlist) {
+            await api.post('/customer-data/wishlist', { product_id: item.id });
+          }
+        } catch (err) {
+          console.error('Failed to sync wishlist', err);
         }
       },
 
@@ -599,7 +917,7 @@ export const useStore = create<AppState>()(
         cardStyle: state.cardStyle,
         cardHoverAnimation: state.cardHoverAnimation,
         backgroundStyle: state.backgroundStyle,
-        cart: state.cart,
+        bundleCardStyle: state.bundleCardStyle,
         trackedOrders: state.trackedOrders,
         trackedOrderPhones: state.trackedOrderPhones,
         branding: state.branding,
@@ -608,9 +926,11 @@ export const useStore = create<AppState>()(
         faqSettings: state.faqSettings,
         notfoundSettings: state.notfoundSettings,
         paymentSettings: state.paymentSettings,
-        wishlist: state.wishlist,
+        shippingSettings: state.shippingSettings,
         user: null,
-        token: null
+        token: null,
+        customer: state.customer,
+        customerToken: state.customerToken
       }),
     }
   )

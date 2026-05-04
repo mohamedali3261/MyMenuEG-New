@@ -199,7 +199,8 @@ export default function Catalog() {
         const matchesSearch = (p.name_ar || '').includes(search) || (p.name_en || '').includes(search);
         const matchesPrice = p.price <= maxPrice;
         const matchesStock = inStockOnly ? p.stock > 0 : true;
-        return isActive && matchesCat && matchesSearch && matchesPrice && matchesStock;
+        const isBundle = p.bundle_items && p.bundle_items.length > 0;
+        return isActive && matchesCat && matchesSearch && matchesPrice && matchesStock && !isBundle;
       })
       .sort((a, b) => {
         if (sortOrder === 'price-asc') return a.price - b.price;

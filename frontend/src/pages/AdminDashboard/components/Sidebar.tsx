@@ -1,11 +1,11 @@
-import { 
-  LayoutDashboard, 
-  ShoppingBag, 
-  ListOrdered, 
-  Users, 
-  Settings, 
-  Tag, 
-  Layout, 
+import {
+  LayoutDashboard,
+  ShoppingBag,
+  ListOrdered,
+  Users,
+  Settings,
+  Tag,
+  Layout,
   X,
   LogOut,
   Shield,
@@ -14,13 +14,18 @@ import {
   MessageSquare,
   CreditCard,
   PanelLeftClose,
-  PanelLeftOpen
+  PanelLeftOpen,
+  Truck,
+  Star,
+  HelpCircle,
+  GalleryHorizontalEnd,
+  Sparkles
 } from 'lucide-react';
 import { useStore } from '../../../store/store';
 import { Link, useLocation, useNavigate } from 'react-router-dom';
-import { motion, AnimatePresence } from 'framer-motion';
 import { ADMIN_TABS } from './adminTabs';
-import { useMemo, useState } from 'react';
+import { useMemo, useState, useEffect } from 'react';
+import { api } from '../../../api';
 
 interface SidebarProps {
   isOpen: boolean;
@@ -38,14 +43,33 @@ interface SidebarTab {
 }
 
 export default function Sidebar({ isOpen, onClose, isCollapsed, onToggleCollapse }: SidebarProps) {
-  const { rtl, user, logout } = useStore();
+  const { rtl, user, logout, sidebarBadgeVersion } = useStore();
   const location = useLocation();
   const navigate = useNavigate();
   const [searchTerm, setSearchTerm] = useState('');
+  const [badgeCounts, setBadgeCounts] = useState<Record<string, number>>({});
+
+  useEffect(() => {
+    const fetchCounts = async () => {
+      try {
+        const res = await api.get('/stats/sidebar-counts');
+        setBadgeCounts({
+          orders: res.data.pendingOrders,
+          messages: res.data.newMessages,
+          customers: res.data.totalCustomers,
+        });
+      } catch (error) {
+        console.warn('Failed to fetch sidebar counts', error);
+      }
+    };
+    fetchCounts();
+    const interval = setInterval(fetchCounts, 60000);
+    return () => clearInterval(interval);
+  }, [sidebarBadgeVersion]);
 
   const handleLogout = () => {
     logout();
-    navigate('/admin/login');
+    navigate('/login');
   };
 
   const iconMap: Record<string, React.ComponentType<{ size?: number; className?: string }>> = {
@@ -60,8 +84,14 @@ export default function Sidebar({ isOpen, onClose, isCollapsed, onToggleCollapse
     database: Database,
     pages: Layout,
     offers: Megaphone,
+    messages: MessageSquare,
     contact: MessageSquare,
     payment: CreditCard,
+    shipping: Truck,
+    reviews: Star,
+    auth: Shield,
+    faq: HelpCircle,
+    marquee: GalleryHorizontalEnd,
     settings: Settings
   };
 
@@ -70,7 +100,7 @@ export default function Sidebar({ isOpen, onClose, isCollapsed, onToggleCollapse
     path: tab.path,
     superAdminOnly: tab.superAdminOnly,
     label: rtl ? tab.labelAr : tab.labelEn,
-    icon: iconMap[tab.id] || Layout
+    icon: iconMap[tab.id] || Layout,
   }));
 
   const filteredTabs = tabs.filter(tab => {
@@ -81,6 +111,10 @@ export default function Sidebar({ isOpen, onClose, isCollapsed, onToggleCollapse
     if (tab.id === 'overview') return true;
     if (tab.id === 'contact' && user.permissions.includes('settings')) return true;
     if (tab.id === 'payment' && user.permissions.includes('settings')) return true;
+    if (tab.id === 'shipping' && user.permissions.includes('settings')) return true;
+    if (tab.id === 'auth' && user.permissions.includes('settings')) return true;
+    if (tab.id === 'faq' && user.permissions.includes('settings')) return true;
+    if (tab.id === 'reviews' && (user.permissions.includes('reviews') || user.permissions.includes('settings'))) return true;
     return user.permissions.includes(tab.id) || user.permissions.includes('all');
   });
 
@@ -96,25 +130,25 @@ export default function Sidebar({ isOpen, onClose, isCollapsed, onToggleCollapse
         id: 'store',
         titleAr: 'المتجر',
         titleEn: 'Store',
-        tabIds: ['overview', 'products', 'categories', 'slides', 'pages'],
+        tabIds: ['overview', 'products', 'categories', 'slides', 'marquee', 'pages'],
       },
       {
         id: 'sales',
         titleAr: 'المبيعات',
         titleEn: 'Sales',
-        tabIds: ['orders', 'customers', 'coupons'],
+        tabIds: ['orders', 'customers', 'coupons', 'messages', 'reviews'],
       },
       {
         id: 'marketing',
         titleAr: 'التسويق',
         titleEn: 'Marketing',
-        tabIds: ['offers', 'contact'],
+        tabIds: ['offers', 'contact', 'faq'],
       },
       {
         id: 'system',
         titleAr: 'النظام',
         titleEn: 'System',
-        tabIds: ['payment', 'settings', 'users', 'database'],
+        tabIds: ['payment', 'shipping', 'auth', 'settings', 'users', 'database'],
       },
     ];
 
@@ -129,32 +163,20 @@ export default function Sidebar({ isOpen, onClose, isCollapsed, onToggleCollapse
 
   return (
     <>
-      {/* Desktop Sidebar (Floating & Animated) */}
-      <motion.aside 
-        initial={false}
-        animate={{ 
-          width: isCollapsed ? 100 : 320,
-          transition: { type: 'spring', damping: 24, stiffness: 200 }
-        }}
-        className={`hidden lg:flex flex-col gap-2 rounded-[2.5rem] my-4 ml-4 h-[calc(100vh-8rem)] sticky top-28 p-4 relative overflow-hidden group/sidebar bg-white/70 dark:bg-slate-900/60 backdrop-blur-2xl border border-white/20 dark:border-white/5 shadow-[0_20px_50px_rgba(0,0,0,0.1)] dark:shadow-[0_20px_50px_rgba(0,0,0,0.3)] z-50`}
+      {/* Desktop Sidebar - Simple & Fast */}
+      <aside 
+        className={`hidden lg:flex flex-col gap-2 rounded-2xl my-2 ml-4 h-[calc(100vh-4rem)] sticky top-0 p-4 shrink-0 bg-white dark:bg-slate-900 border border-slate-200 dark:border-white/10 shadow-lg z-50 transition-all duration-200 ${isCollapsed ? 'w-[100px]' : 'w-[280px]'}`}
       >
-        {/* Animated Gloss Effect */}
-        <div className="absolute -top-[20%] -left-[20%] w-[140%] h-[140%] bg-gradient-to-br from-primary-500/5 via-transparent to-primary-500/5 rotate-12 pointer-events-none" />
-        <div className="absolute top-0 right-0 w-32 h-32 bg-primary-500/5 blur-[60px] rounded-full pointer-events-none group-hover/sidebar:bg-primary-500/10 transition-all duration-700" />
         
-        <div className={`mb-6 py-2 border-b border-slate-200/50 dark:border-white/5 relative z-10 ${isCollapsed ? 'px-0' : 'px-2'}`}>
+        <div className={`mb-4 py-2 border-b border-slate-200 dark:border-white/10 ${isCollapsed ? 'px-0' : 'px-2'}`}>
           <div className={`flex items-center ${isCollapsed ? 'justify-center' : 'justify-between'} gap-2`}>
             {!isCollapsed && (
-              <motion.div
-                initial={{ opacity: 0, x: -10 }}
-                animate={{ opacity: 1, x: 0 }}
-                className="flex items-center gap-2"
-              >
-                <div className="w-2 h-2 rounded-full bg-primary-500 shadow-[0_0_12px_rgba(59,130,246,0.6)]" />
-                <h2 className="text-lg font-black tracking-tighter text-slate-800 dark:text-white uppercase">
+              <div className="flex items-center gap-2">
+                <div className="w-2 h-2 rounded-full bg-primary-500" />
+                <h2 className="text-sm font-bold text-slate-800 dark:text-white">
                   {rtl ? 'لوحة التحكم' : 'Control'}
                 </h2>
-              </motion.div>
+              </div>
             )}
             <button
               onClick={onToggleCollapse}
@@ -167,189 +189,141 @@ export default function Sidebar({ isOpen, onClose, isCollapsed, onToggleCollapse
           </div>
         </div>
         
-        <div className={`flex-grow flex flex-col gap-4 overflow-y-auto no-scrollbar relative z-10 ${isCollapsed ? '' : 'px-1'}`}>
+        <div className={`flex-grow flex flex-col gap-3 overflow-y-auto no-scrollbar ${isCollapsed ? '' : 'px-1'}`}>
           {!isCollapsed && (
-            <motion.div 
-              initial={{ opacity: 0, scale: 0.95 }}
-              animate={{ opacity: 1, scale: 1 }}
-              className="relative mb-2"
-            >
+            <div className="relative mb-1">
               <input
                 value={searchTerm}
                 onChange={(e) => setSearchTerm(e.target.value)}
                 type="text"
-                placeholder={rtl ? 'البحث...' : 'Jump to...'}
-                className="w-full h-11 rounded-2xl bg-slate-100/50 dark:bg-black/20 border border-slate-200 dark:border-white/5 px-4 text-[13px] font-bold outline-none focus:ring-4 focus:ring-primary-500/10 focus:border-primary-500 transition-all"
+                placeholder={rtl ? 'البحث...' : 'Search...'}
+                className="w-full h-9 rounded-xl bg-slate-100 dark:bg-white/5 border border-slate-200 dark:border-white/10 px-3 text-xs font-bold outline-none focus:border-primary-500 transition-colors"
               />
-            </motion.div>
+            </div>
           )}
 
-          {groupedTabs.map((group, idx) => (
-            <div key={group.id} className="space-y-2">
+          {groupedTabs.map((group) => (
+            <div key={group.id} className="space-y-1">
               {!isCollapsed && (
-                <motion.p 
-                  initial={{ opacity: 0 }}
-                  animate={{ opacity: 0.5 }}
-                  transition={{ delay: 0.1 * idx }}
-                  className="px-3 text-[10px] uppercase tracking-[0.2em] font-black text-slate-500 dark:text-slate-400 mb-1"
-                >
+                <p className="px-2 text-[10px] uppercase tracking-wider font-bold text-slate-400 dark:text-slate-500">
                   {group.title}
-                </motion.p>
+                </p>
               )}
-              <div className="flex flex-col gap-1">
+              <div className="flex flex-col gap-0.5">
                 {group.tabs.map((tab) => (
-                  <SidebarLink key={tab.id} tab={tab} rtl={rtl} currentPath={location.pathname} isCollapsed={isCollapsed} />
+                  <SidebarLink key={tab.id} tab={tab} rtl={rtl} currentPath={location.pathname} isCollapsed={isCollapsed} badgeCounts={badgeCounts} />
                 ))}
               </div>
             </div>
           ))}
         </div>
 
-        {/* Improved Footer Section */}
-        <div className="mt-auto pt-4 border-t border-slate-200/50 dark:border-white/5 relative z-10">
-          <motion.div 
-            whileHover={{ y: -2 }}
-            className={`flex items-center p-3 rounded-3xl bg-slate-50 dark:bg-white/5 border border-slate-200 dark:border-white/10 ${isCollapsed ? 'justify-center' : 'gap-3 shadow-sm'}`}
-          >
-            <div className="w-10 h-10 rounded-2xl bg-primary-500 shadow-lg shadow-primary-500/20 flex items-center justify-center text-white font-black text-sm ring-2 ring-white/10 shrink-0">
+        {/* Footer Section */}
+        <div className="mt-auto pt-3 border-t border-slate-200 dark:border-white/10">
+          <div className={`flex items-center p-2 rounded-xl bg-slate-50 dark:bg-white/5 ${isCollapsed ? 'justify-center' : 'gap-2'}`}>
+            <div className="w-8 h-8 rounded-lg bg-primary-500 flex items-center justify-center text-white font-bold text-sm shrink-0">
               {user?.username.substring(0, 1).toUpperCase()}
             </div>
             {!isCollapsed && (
               <div className="flex-grow min-w-0">
-                <p className="text-slate-900 dark:text-white text-sm font-black truncate leading-tight">{user?.username}</p>
-                <div className="flex items-center gap-1.5">
-                  <div className="w-1 h-1 rounded-full bg-emerald-500 animate-pulse" />
-                  <p className="text-slate-500 dark:text-slate-400 text-[10px] font-black uppercase tracking-wider">{user?.is_super_admin ? (rtl ? 'مدير' : 'S-Admin') : (rtl ? 'مسؤول' : 'Staff')}</p>
-                </div>
+                <p className="text-slate-900 dark:text-white text-xs font-bold truncate">{user?.username}</p>
+                <p className="text-slate-400 text-[10px]">{user?.is_super_admin ? (rtl ? 'مدير' : 'Admin') : (rtl ? 'مسؤول' : 'Staff')}</p>
               </div>
             )}
-          </motion.div>
+          </div>
           
           <button 
             onClick={handleLogout}
-            className={`w-full mt-2 flex items-center py-3 rounded-2xl text-slate-400 hover:text-red-500 dark:hover:text-red-400 hover:bg-red-500/5 transition-all font-black group ${isCollapsed ? 'justify-center' : 'gap-3 px-4'}`}
+            className={`w-full mt-2 flex items-center py-2 rounded-xl text-slate-400 hover:text-red-500 hover:bg-red-500/5 transition-colors font-bold ${isCollapsed ? 'justify-center' : 'gap-2 px-3'}`}
           >
-            <LogOut size={18} className="group-hover:-translate-x-1 group-hover:scale-110 transition-all duration-300" />
-            {!isCollapsed && <span className="text-xs uppercase tracking-widest">{rtl ? 'الخروج' : 'Logout'}</span>}
+            <LogOut size={16} />
+            {!isCollapsed && <span className="text-xs">{rtl ? 'خروج' : 'Logout'}</span>}
           </button>
         </div>
-      </motion.aside>
+      </aside>
 
-      {/* Mobile Drawer (Absolute) */}
-      <AnimatePresence>
-        {isOpen && (
-          <motion.aside 
-            initial={{ [rtl ? 'right' : 'left']: '-100%' }}
-            animate={{ [rtl ? 'right' : 'left']: 0 }}
-            exit={{ [rtl ? 'right' : 'left']: '-100%' }}
-            transition={{ type: "spring", damping: 25, stiffness: 200 }}
-            className={`lg:hidden fixed top-24 bottom-0 w-80 z-[110] glass-card rounded-none border-y-0 p-4 flex flex-col gap-2 shadow-2xl h-[calc(100vh-6rem)] bg-gradient-to-b from-white to-slate-100 dark:from-slate-900 dark:to-slate-950 ${rtl ? 'right-0 border-l border-r-0' : 'left-0 border-r border-l-0'}`}
-          >
-            <div className="flex justify-between items-center mb-8 px-4">
-               <div>
-                 <h2 className="text-2xl font-black tracking-tight text-primary-500 uppercase">Packet</h2>
-                 <p className="text-[11px] text-slate-500 dark:text-slate-400 font-bold">
-                   {rtl ? 'لوحة التحكم' : 'Admin Panel'}
-                 </p>
-               </div>
-               <button onClick={onClose} className={`p-2 text-slate-400 ${rtl ? '-ml-2' : '-mr-2'}`}><X size={20} /></button>
+      {/* Mobile Drawer - Simple */}
+      {isOpen && (
+        <aside 
+          className={`lg:hidden fixed top-20 bottom-0 w-72 z-[110] bg-white dark:bg-slate-900 border-r border-slate-200 dark:border-white/10 p-4 flex flex-col gap-2 shadow-xl h-[calc(100vh-5rem)] ${rtl ? 'right-0 border-l' : 'left-0'}`}
+        >
+          <div className="flex justify-between items-center mb-4">
+             <h2 className="text-lg font-bold text-slate-800 dark:text-white">{rtl ? 'القائمة' : 'Menu'}</h2>
+             <button onClick={onClose} className="p-2 text-slate-400 hover:text-slate-600"><X size={20} /></button>
+          </div>
+          
+          <div className="flex-grow flex flex-col gap-2 overflow-y-auto">
+            <div className="mb-2">
+              <input
+                value={searchTerm}
+                onChange={(e) => setSearchTerm(e.target.value)}
+                type="text"
+                placeholder={rtl ? 'بحث...' : 'Search...'}
+                className="w-full h-9 rounded-lg bg-slate-100 dark:bg-white/5 border border-slate-200 dark:border-white/10 px-3 text-sm outline-none focus:border-primary-500"
+              />
             </div>
-            
-            <div className="flex-grow flex flex-col gap-3 overflow-y-auto">
-              <div className="px-1">
-                <input
-                  value={searchTerm}
-                  onChange={(e) => setSearchTerm(e.target.value)}
-                  type="text"
-                  placeholder={rtl ? 'ابحث عن قسم...' : 'Jump to section...'}
-                  className="w-full h-10 rounded-xl bg-white/70 dark:bg-white/5 border border-slate-200 dark:border-white/10 px-3 text-sm font-semibold outline-none focus:border-primary-500 transition-colors"
-                />
-              </div>
-              {groupedTabs.map((group) => (
-                <div key={group.id} className="space-y-1">
-                  <p className="px-2 text-[10px] uppercase tracking-[0.16em] font-black text-slate-500 dark:text-slate-400">
-                    {group.title}
-                  </p>
-                  {group.tabs.map((tab) => (
-                    <SidebarLink key={tab.id} tab={tab} rtl={rtl} currentPath={location.pathname} />
-                  ))}
-                </div>
-              ))}
-              {groupedTabs.length === 0 && (
-                <p className="px-2 py-3 text-xs font-bold text-slate-500 dark:text-slate-400">
-                  {rtl ? 'لا توجد نتائج مطابقة' : 'No matching sections'}
+            {groupedTabs.map((group) => (
+              <div key={group.id} className="space-y-1">
+                <p className="px-2 text-[10px] uppercase tracking-wider font-bold text-slate-400">
+                  {group.title}
                 </p>
-              )}
-            </div>
-
-            <div className="mt-auto pt-4 border-t border-white/5 space-y-2">
-              <div className="flex items-center gap-3 px-4 py-3 mb-2 rounded-xl bg-white/70 dark:bg-white/5 border border-slate-200 dark:border-white/10">
-                <div className="w-8 h-8 rounded-full bg-primary-500/20 flex items-center justify-center text-primary-500 font-bold text-xs ring-1 ring-primary-500/30">
-                    {user?.username.substring(0, 1).toUpperCase()}
-                </div>
-                <div className="flex-grow min-w-0">
-                    <p className="text-slate-800 dark:text-white text-[15px] font-bold truncate">{user?.username}</p>
-                    <p className="text-slate-500 text-[13px]">{user?.is_super_admin ? 'مدير عام' : 'مسؤول'}</p>
-                </div>
+                {group.tabs.map((tab) => (
+                  <SidebarLink key={tab.id} tab={tab} rtl={rtl} currentPath={location.pathname} badgeCounts={badgeCounts} />
+                ))}
               </div>
-              <button 
-                onClick={handleLogout}
-                className="w-full flex items-center gap-3 px-4 py-3 rounded-xl text-red-400 hover:bg-red-500/10 transition-all font-bold"
-              >
-                <LogOut size={18} />
-                <span className="text-[18px]">{rtl ? 'تسجيل الخروج' : 'Logout'}</span>
-              </button>
+            ))}
+          </div>
+
+          <div className="mt-auto pt-3 border-t border-slate-200 dark:border-white/10">
+            <div className="flex items-center gap-2 px-2 py-2 mb-2 rounded-lg bg-slate-50 dark:bg-white/5">
+              <div className="w-8 h-8 rounded-lg bg-primary-500 flex items-center justify-center text-white font-bold text-xs">
+                  {user?.username.substring(0, 1).toUpperCase()}
+              </div>
+              <div className="flex-grow min-w-0">
+                  <p className="text-slate-800 dark:text-white text-sm font-bold truncate">{user?.username}</p>
+                  <p className="text-slate-500 text-xs">{user?.is_super_admin ? (rtl ? 'مدير' : 'Admin') : (rtl ? 'مسؤول' : 'Staff')}</p>
+              </div>
             </div>
-          </motion.aside>
-        )}
-      </AnimatePresence>
+            <button 
+              onClick={handleLogout}
+              className="w-full flex items-center gap-2 px-3 py-2 rounded-lg text-red-500 hover:bg-red-500/10 transition-colors font-bold"
+            >
+              <LogOut size={16} />
+              <span>{rtl ? 'خروج' : 'Logout'}</span>
+            </button>
+          </div>
+        </aside>
+      )}
     </>
   );
 }
 
-function SidebarLink({ tab, currentPath, rtl, isCollapsed }: { tab: SidebarTab, rtl: boolean, currentPath: string, isCollapsed?: boolean }) {
+function SidebarLink({ tab, currentPath, rtl, isCollapsed, badgeCounts = {} }: { tab: SidebarTab, rtl: boolean, currentPath: string, isCollapsed?: boolean, badgeCounts?: Record<string, number> }) {
   const Icon = tab.icon;
   const isActive = currentPath === tab.path || (tab.path !== '/admin' && currentPath.startsWith(tab.path));
-  
+  const count = badgeCounts[tab.id] || 0;
+
   return (
-    <motion.div
-      whileHover={{ scale: 1.02 }}
-      whileTap={{ scale: 0.98 }}
+    <Link
+      to={tab.path}
+      className={`flex items-center px-3 py-2.5 rounded-xl transition-colors gap-2 ${
+        isActive 
+          ? 'bg-primary-500 text-white' 
+          : 'hover:bg-slate-100 dark:hover:bg-white/5 text-slate-600 dark:text-slate-400'
+      }`}
+      title={tab.label}
     >
-      <Link
-        to={tab.path}
-        className={`flex items-center px-4 py-3 rounded-2xl transition-all relative overflow-hidden group/link ${
-          isCollapsed ? 'justify-center' : 'gap-3'
-        } ${
-          isActive 
-            ? 'bg-primary-500 text-white shadow-lg shadow-primary-500/30' 
-            : 'hover:bg-primary-500/5 text-slate-500 dark:text-slate-400 hover:text-primary-500'
-        }`}
-        title={tab.label}
-      >
-        <div className={`h-8 w-8 rounded-xl flex items-center justify-center shrink-0 transition-all duration-300 ${isActive ? 'bg-white/20' : 'bg-slate-100 dark:bg-white/5 group-hover/link:bg-primary-500/10 group-hover/link:rotate-12'}`}>
-          <Icon size={18} className="transition-transform duration-300" />
-        </div>
-        {!isCollapsed && (
-          <span className="font-black text-[12px] uppercase tracking-wider relative z-10 whitespace-nowrap">
-            {tab.label}
+      <div className={`h-8 w-8 rounded-lg flex items-center justify-center shrink-0 relative ${isActive ? 'bg-white/20' : 'bg-slate-100 dark:bg-white/5'}`}>
+        <Icon size={18} />
+        {count > 0 && (
+          <span className={`absolute -top-1 -right-1 min-w-[16px] h-4 px-1 flex items-center justify-center rounded-full text-[9px] font-bold ${isActive ? 'bg-white text-primary-500' : 'bg-primary-500 text-white'}`}>
+            {count > 99 ? '99+' : count}
           </span>
         )}
-        {isActive && (
-          <motion.div 
-            layoutId="activeTabGlow"
-            className="absolute inset-0 bg-gradient-to-r from-white/10 to-transparent pointer-events-none"
-            initial={{ opacity: 0 }}
-            animate={{ opacity: 1 }}
-          />
-        )}
-        {isActive && (
-          <motion.div 
-            layoutId="activeTabIndicator"
-            className={`absolute ${isCollapsed ? 'bottom-1 left-1/2 -translate-x-1/2 h-1 w-4' : `${rtl ? 'left-3' : 'right-3'} w-1 h-3`} bg-white/60 rounded-full`}
-          />
-        )}
-      </Link>
-    </motion.div>
+      </div>
+      <span className={`font-bold whitespace-nowrap flex-grow ${isCollapsed ? 'text-[10px]' : 'text-xs'}`}>
+        {tab.label}
+      </span>
+    </Link>
   );
 }

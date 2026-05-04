@@ -1,15 +1,20 @@
 import { useState, useRef, useEffect, useCallback } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
-import { Database, Download, ShieldAlert, Loader2, Lock, FileJson, AlertTriangle, Trash2, Upload, Clock, History, Save, RotateCcw, HardDrive, CheckSquare, Square, Shield, FolderOpen, XCircle, ClipboardList, DatabaseBackup, Cloud, Settings, ExternalLink } from 'lucide-react';
+import { Database, Download, ShieldAlert, Loader2, Lock, FileJson, AlertTriangle, Trash2, Upload, Clock, History, Save, RotateCcw, HardDrive, CheckSquare, Square, Shield, FolderOpen, XCircle, ClipboardList, DatabaseBackup, Cloud, Settings, ExternalLink, Image } from 'lucide-react';
 import { useStore } from '../../../store/store';
 
 const TABLE_GROUPS = [
+  { key: 'admins', labelAr: 'المسؤولين', labelEn: 'Admins' },
+  { key: 'customers', labelAr: 'العملاء', labelEn: 'Customers', includes: ['customers', 'customer_wishlists', 'customer_carts', 'customer_notifications'] },
   { key: 'categories', labelAr: 'التصنيفات', labelEn: 'Categories' },
-  { key: 'products', labelAr: 'المنتجات', labelEn: 'Products', includes: ['products', 'product_specs', 'product_images'] },
+  { key: 'products', labelAr: 'المنتجات', labelEn: 'Products', includes: ['products', 'product_specs', 'product_images', 'product_quantity_prices', 'product_detail_items', 'product_faqs', 'product_variants', 'product_variant_images', 'product_bundle_items', 'product_fbt', 'product_reviews'] },
   { key: 'orders', labelAr: 'الطلبات', labelEn: 'Orders', includes: ['orders', 'order_items'] },
   { key: 'hero_slides', labelAr: 'السلايدر', labelEn: 'Slider' },
   { key: 'coupons', labelAr: 'الكوبونات', labelEn: 'Coupons' },
   { key: 'notifications', labelAr: 'الإشعارات', labelEn: 'Notifications' },
+  { key: 'settings', labelAr: 'الإعدادات', labelEn: 'Settings' },
+  { key: 'store_pages', labelAr: 'الصفحات', labelEn: 'Pages' },
+  { key: 'contact_submissions', labelAr: 'رسائل التواصل', labelEn: 'Contact Messages' },
 ];
 
 type BackupFile = {
@@ -36,12 +41,19 @@ export default function DatabaseBackups() {
   const [showWipeModal, setShowWipeModal] = useState(false);
   const [wipeConfirmText, setWipeConfirmText] = useState('');
   const [lastBackup, setLastBackup] = useState<string | null>(null);
-  const fileInputRef = useRef<HTMLInputElement>(null);
+  const fileInputDbRef = useRef<HTMLInputElement>(null);
+  const fileInputFullRef = useRef<HTMLInputElement>(null);
 
   // Selective tables
   const [selectedTables, setSelectedTables] = useState<string[]>([
-    'categories', 'products', 'product_specs', 'product_images',
-    'orders', 'order_items', 'hero_slides', 'coupons', 'notifications'
+    'admins', 'refresh_tokens', 'backup_logs',
+    'customers', 'customer_wishlists', 'customer_carts', 'customer_notifications',
+    'categories', 'coupons', 'hero_slides', 'notifications',
+    'orders', 'order_items',
+    'products', 'product_specs', 'product_images', 'product_quantity_prices',
+    'product_detail_items', 'product_faqs', 'product_variants', 'product_variant_images',
+    'product_bundle_items', 'product_fbt', 'product_reviews',
+    'settings', 'store_pages', 'contact_submissions'
   ]);
   const [showAdvanced, setShowAdvanced] = useState(false);
 
@@ -184,29 +196,29 @@ export default function DatabaseBackups() {
     }
   };
 
+  const downloadBlob = async (url: string, filename: string) => {
+    const response = await fetch(url, { headers: { 'Authorization': `Bearer ${token}` } });
+    if (!response.ok) throw new Error('Download failed');
+    const blob = await response.blob();
+    const objUrl = window.URL.createObjectURL(blob);
+    const a = document.createElement('a');
+    a.href = objUrl;
+    a.download = filename;
+    document.body.appendChild(a);
+    a.click();
+    window.URL.revokeObjectURL(objUrl);
+  };
+
   const handleDownloadBackup = async () => {
     setIsDownloading(true);
     try {
-      const tablesParam = selectedTables.join(',');
-      const response = await fetch(`${API_BASE}/api/v1/database/backup?tables=${tablesParam}`, {
-        headers: { 'Authorization': `Bearer ${token}` }
-      });
-      if (!response.ok) throw new Error('Download failed');
-
-      const blob = await response.blob();
-      const url = window.URL.createObjectURL(blob);
-      const a = document.createElement('a');
-      a.href = url;
-      a.download = `mymenueg_complete_backup_${new Date().toISOString().split('T')[0]}.zip`;
-      document.body.appendChild(a);
-      a.click();
-      window.URL.revokeObjectURL(url);
-      
+      const dateStr = new Date().toISOString().split('T')[0];
+      await downloadBlob(`${API_BASE}/api/v1/database/backup`, `mymenueg_full_${dateStr}.zip`);
       setLastBackup(new Date().toLocaleString(rtl ? 'ar-EG' : 'en-US'));
       showToast(rtl ? 'تم تحميل النسخة الاحتياطية بنجاح!' : 'Backup downloaded!', 'success');
       fetchLogs();
     } catch {
-      showToast(rtl ? 'حدث خطأ أثناء تحميل النسخة' : 'Error downloading backup', 'error');
+      showToast(rtl ? 'حدث خطأ أثناء التحميل' : 'Error downloading backup', 'error');
     } finally {
       setIsDownloading(false);
     }
@@ -231,13 +243,13 @@ export default function DatabaseBackups() {
     }
   };
 
-  const handleRestoreBackup = async (e: React.ChangeEvent<HTMLInputElement>) => {
+  const handleRestoreBackup = async (e: React.ChangeEvent<HTMLInputElement>, includeImages: boolean) => {
     const file = e.target.files?.[0];
     if (!file) return;
     setIsRestoring(true);
     const formData = new FormData();
     formData.append('backup_file', file);
-    formData.append('tables', JSON.stringify(selectedTables));
+    formData.append('include_images', includeImages ? 'true' : 'false');
 
     try {
       const response = await fetch(`${API_BASE}/api/v1/database/restore`, {
@@ -247,8 +259,9 @@ export default function DatabaseBackups() {
       });
       const data = await response.json();
       if (response.ok) {
-        showToast(rtl ? 'تمت استعادة البيانات بنجاح!' : 'Data restored!', 'success');
-        if (fileInputRef.current) fileInputRef.current.value = '';
+        showToast(rtl ? 'تمت الاستعادة بنجاح!' : 'Restored!', 'success');
+        if (includeImages && fileInputFullRef.current) fileInputFullRef.current.value = '';
+        if (!includeImages && fileInputDbRef.current) fileInputDbRef.current.value = '';
         fetchSavedBackups();
         fetchLogs();
       } else {
@@ -263,10 +276,10 @@ export default function DatabaseBackups() {
   };
 
   const handleRestoreSaved = async (filename: string) => {
-    if (!confirm(rtl ? `هل أنت متأكد من استعادة ${filename}؟` : `Restore from ${filename}?`)) return;
+    const includeImages = confirm(rtl ? `هل تريد استعادة الصور أيضاً مع البيانات من ${filename}؟` : `Restore images too from ${filename}?`);
     setLoadingSaved(true);
     try {
-      const res = await fetch(`${API_BASE}/api/v1/database/saved-backups/${filename}/restore`, {
+      const res = await fetch(`${API_BASE}/api/v1/database/saved-backups/${filename}/restore?images=${includeImages}`, {
         method: 'POST',
         headers: { 'Authorization': `Bearer ${token}` }
       });
@@ -334,7 +347,7 @@ export default function DatabaseBackups() {
     const cls = 'shrink-0';
     switch (action) {
       case 'download': return <Download size={16} className={`${cls} text-primary-500`} />;
-      case 'auto_backup': return <Clock size={16} className={`${cls} text-green-500`} />;
+      case 'auto_backup': return <Clock size={16} className={`${cls} text-primary-500`} />;
       case 'manual_backup': return <Save size={16} className={`${cls} text-blue-500`} />;
       case 'wipe': return <Trash2 size={16} className={`${cls} text-red-500`} />;
       case 'restore': return <RotateCcw size={16} className={`${cls} text-amber-500`} />;
@@ -414,14 +427,14 @@ export default function DatabaseBackups() {
 
       {/* Main Cards Grid */}
       <div className="grid grid-cols-1 md:grid-cols-3 gap-5">
-        {/* Download Backup Card */}
+        {/* Download Both Backups Card */}
         <motion.div initial={{ opacity: 0, y: 20 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: 0.1 }}
           className="glass-card p-6 flex flex-col items-center text-center gap-3 group">
           <div className="w-16 h-16 bg-primary-500/10 text-primary-500 rounded-full flex items-center justify-center group-hover:scale-110 group-hover:bg-primary-500 group-hover:text-white transition-all duration-500">
-            <FileJson size={28} />
+            <Download size={28} />
           </div>
-          <h3 className="text-lg font-bold text-slate-800 dark:text-white">{rtl ? 'تحميل ZIP' : 'Download ZIP'}</h3>
-          <p className="text-xs text-slate-500 mb-2">{rtl ? 'تحميل مباشر للجهاز' : 'Direct download to device'}</p>
+          <h3 className="text-lg font-bold text-slate-800 dark:text-white">{rtl ? 'تحميل النسخة الاحتياطية' : 'Download Backup'}</h3>
+          <p className="text-xs text-slate-500 mb-2">{rtl ? 'بيانات + صور (ملف ZIP واحد)' : 'DB + Images (1 ZIP file)'}</p>
           <button onClick={handleDownloadBackup} disabled={isDownloading}
             className={`w-full py-3 rounded-xl flex justify-center items-center gap-2 font-bold transition-all ${isDownloading ? 'bg-slate-100 text-slate-400' : 'bg-primary-500 text-white hover:bg-primary-600 active:scale-95 shadow-lg shadow-primary-500/30'}`}>
             {isDownloading ? <><Loader2 className="animate-spin" size={18} /> {rtl ? 'جاري...' : 'Exporting...'}</> : <><Download size={18} /> {rtl ? 'تحميل' : 'Download'}</>}
@@ -442,19 +455,27 @@ export default function DatabaseBackups() {
           </button>
         </motion.div>
 
-        {/* Restore Card */}
+        {/* Restore Card - two file inputs */}
         <motion.div initial={{ opacity: 0, y: 20 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: 0.2 }}
           className="glass-card p-6 flex flex-col items-center text-center gap-3 group">
           <div className="w-16 h-16 bg-amber-500/10 text-amber-500 rounded-full flex items-center justify-center group-hover:scale-110 group-hover:bg-amber-500 group-hover:text-white transition-all duration-500">
             <Upload size={28} />
           </div>
           <h3 className="text-lg font-bold text-slate-800 dark:text-white">{rtl ? 'استعادة من ملف' : 'Restore from File'}</h3>
-          <p className="text-xs text-slate-500 mb-2">{rtl ? 'رفع ملف .zip للاستعادة' : 'Upload a .zip backup'}</p>
-          <input type="file" accept=".zip" ref={fileInputRef} onChange={handleRestoreBackup} className="hidden" id="restore-upload" />
-          <label htmlFor="restore-upload"
-            className={`w-full py-3 rounded-xl flex justify-center items-center gap-2 font-bold cursor-pointer transition-all border-2 border-dashed ${isRestoring ? 'border-slate-300 bg-slate-50 text-slate-400 pointer-events-none' : 'border-amber-500 text-amber-600 bg-amber-50 dark:bg-amber-500/10 hover:bg-amber-500 hover:text-white'}`}>
-            {isRestoring ? <><Loader2 className="animate-spin" size={18} /> {rtl ? 'جاري...' : 'Restoring...'}</> : <><RotateCcw size={18} /> {rtl ? 'اختر ملف' : 'Select File'}</>}
-          </label>
+          <div className="w-full space-y-2">
+            <input type="file" accept=".zip" ref={fileInputFullRef} onChange={(e) => handleRestoreBackup(e, true)} className="hidden" id="restore-full" />
+            <label htmlFor="restore-full"
+              className={`w-full py-2.5 rounded-xl flex justify-center items-center gap-2 font-bold cursor-pointer transition-all border-2 border-dashed text-sm ${isRestoring ? 'border-slate-300 bg-slate-50 text-slate-400 pointer-events-none' : 'border-emerald-400 text-emerald-600 bg-emerald-50 dark:bg-emerald-500/10 hover:bg-emerald-500 hover:text-white'}`}>
+              {isRestoring ? <Loader2 className="animate-spin" size={16} /> : <DatabaseBackup size={16} />}
+              {rtl ? 'ملف شامل (بيانات + صور)' : 'Full Backup (DB + Images)'}
+            </label>
+            <input type="file" accept=".zip" ref={fileInputDbRef} onChange={(e) => handleRestoreBackup(e, false)} className="hidden" id="restore-db" />
+            <label htmlFor="restore-db"
+              className={`w-full py-2.5 rounded-xl flex justify-center items-center gap-2 font-bold cursor-pointer transition-all border-2 border-dashed text-sm ${isRestoring ? 'border-slate-300 bg-slate-50 text-slate-400 pointer-events-none' : 'border-primary-400 text-primary-600 bg-primary-50 dark:bg-primary-500/10 hover:bg-primary-500 hover:text-white'}`}>
+              {isRestoring ? <Loader2 className="animate-spin" size={16} /> : <FileJson size={16} />}
+              {rtl ? 'ملف البيانات فقط' : 'DB Only (No Images)'}
+            </label>
+          </div>
         </motion.div>
       </div>
 
@@ -527,7 +548,7 @@ export default function DatabaseBackups() {
                   </div>
                   <div className="flex items-center justify-between p-4 bg-slate-50 dark:bg-slate-800/30 rounded-2xl border border-dashed border-slate-200 dark:border-slate-700">
                     <div className="flex items-center gap-3">
-                      <div className={`w-10 h-10 rounded-full flex items-center justify-center transition-all ${ghEnabled ? 'bg-green-500 text-white shadow-lg shadow-green-500/20' : 'bg-slate-200 text-slate-400'}`}>
+                      <div className={`w-10 h-10 rounded-full flex items-center justify-center transition-all ${ghEnabled ? 'bg-primary-500 text-white shadow-lg shadow-primary-500/20' : 'bg-slate-200 text-slate-400'}`}>
                         <RotateCcw size={20} className={ghEnabled ? 'animate-spin-slow' : ''} />
                       </div>
                       <div>
@@ -536,8 +557,10 @@ export default function DatabaseBackups() {
                       </div>
                     </div>
                     <button onClick={() => setGhEnabled(!ghEnabled)}
-                      className={`w-14 h-7 rounded-full relative transition-all duration-300 ${ghEnabled ? 'bg-green-500' : 'bg-slate-300 dark:bg-slate-700'}`}>
-                      <div className={`absolute top-1 w-5 h-5 bg-white rounded-full transition-all shadow-md ${rtl ? (ghEnabled ? 'right-8' : 'right-1') : (ghEnabled ? 'left-8' : 'left-1')}`} />
+                      className={`relative w-14 h-7 rounded-full transition-all duration-300 ease-out ${ghEnabled ? 'bg-gradient-to-r from-primary-500 to-primary-600 shadow-lg shadow-primary-500/30' : 'bg-slate-300 dark:bg-slate-600'}`}>
+                      <span className={`absolute top-1 left-1 w-5 h-5 bg-white rounded-full shadow-lg transition-all duration-300 ease-out flex items-center justify-center ${ghEnabled ? 'translate-x-7 shadow-primary-500/20' : 'translate-x-0'}`}>
+                        {ghEnabled && <span className="text-primary-500 text-[10px] font-bold">✓</span>}
+                      </span>
                     </button>
                   </div>
                 </div>
@@ -580,7 +603,7 @@ export default function DatabaseBackups() {
             {savedBackups.map((b) => (
               <div key={b.filename} className="flex items-center justify-between gap-3 p-3 rounded-xl bg-slate-50 dark:bg-white/5 border border-slate-100 dark:border-white/5">
                 <div className="flex items-center gap-3 min-w-0">
-                  <div className={`w-8 h-8 rounded-lg flex items-center justify-center shrink-0 ${b.type === 'auto' ? 'bg-green-500/10 text-green-500' : b.type === 'snapshot' ? 'bg-violet-500/10 text-violet-500' : 'bg-blue-500/10 text-blue-500'}`}>
+                  <div className={`w-8 h-8 rounded-lg flex items-center justify-center shrink-0 ${b.type === 'auto' ? 'bg-primary-500/10 text-primary-500' : b.type === 'snapshot' ? 'bg-violet-500/10 text-violet-500' : 'bg-blue-500/10 text-blue-500'}`}>
                     {b.type === 'auto' ? <Clock size={16} /> : b.type === 'snapshot' ? <Shield size={16} /> : <Save size={16} />}
                   </div>
                   <div className="min-w-0">
@@ -639,9 +662,9 @@ export default function DatabaseBackups() {
 
       {/* Feature 1: Auto-Backup Status */}
       <motion.div initial={{ opacity: 0, y: 20 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: 0.35 }}
-        className="glass-card p-5 flex items-center justify-between flex-wrap gap-4 bg-green-500/5 border-s-4 border-green-500">
+        className="glass-card p-5 flex items-center justify-between flex-wrap gap-4 bg-primary-500/5 border-4 border-primary-500">
         <div className="flex items-center gap-3">
-          <Clock size={22} className="text-green-500" />
+          <Clock size={22} className="text-primary-500" />
           <div>
             <h3 className="font-bold text-slate-800 dark:text-white">{rtl ? 'النسخ الاحتياطي التلقائي' : 'Auto-Backup'}</h3>
             <p className="text-xs text-slate-500">{rtl ? 'يعمل يومياً الساعة 3:00 فجراً تلقائياً ويحتفظ بآخر 7 نسخ' : 'Runs daily at 3:00 AM, keeps last 7 copies'}</p>
@@ -653,8 +676,8 @@ export default function DatabaseBackups() {
               {rtl ? `آخر نسخة: ${lastBackup}` : `Last backup: ${lastBackup}`}
             </span>
           )}
-          <span className="w-2 h-2 rounded-full bg-green-500 animate-pulse"></span>
-          <span className="text-sm font-bold text-green-600 dark:text-green-400">{rtl ? 'نشط' : 'Active'}</span>
+          <span className="w-2 h-2 rounded-full bg-primary-500 animate-pulse"></span>
+          <span className="text-sm font-bold text-primary-600 dark:text-primary-400">{rtl ? 'نشط' : 'Active'}</span>
         </div>
       </motion.div>
 
@@ -670,7 +693,7 @@ export default function DatabaseBackups() {
               {rtl ? 'مسح قاعدة البيانات (Factory Reset)' : 'Wipe Database (Factory Reset)'}
             </h3>
             <p className="text-sm text-slate-500">
-              {rtl ? 'سيتم أخذ لقطة أمان تلقائية قبل الحذف. حسابات المديرين ستبقى.' : 'A safety snapshot is auto-created before wiping. Admin accounts are preserved.'}
+              {rtl ? 'سيتم أخذ لقطة أمان تلقائية قبل الحذف. سيتم حذف كل البيانات ما عدا حسابات المسؤولين.' : 'A safety snapshot is auto-created before wiping. All data deleted except admin accounts.'}
             </p>
           </div>
           <button onClick={() => setShowWipeModal(true)}
@@ -683,9 +706,9 @@ export default function DatabaseBackups() {
       {/* Wipe Confirmation Modal */}
       <AnimatePresence>
         {showWipeModal && (
-          <div className="fixed inset-0 z-[200] flex items-center justify-center p-4">
+          <div className="fixed inset-0 z-[200] flex items-start justify-center pt-20 pb-6 px-4 overflow-y-auto">
             <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }}
-              onClick={() => setShowWipeModal(false)} className="absolute inset-0 bg-slate-900/60 backdrop-blur-sm" />
+              onClick={() => setShowWipeModal(false)} className="fixed inset-0 bg-slate-900/60 backdrop-blur-sm" />
             <motion.div initial={{ opacity: 0, scale: 0.95 }} animate={{ opacity: 1, scale: 1 }} exit={{ opacity: 0, scale: 0.95 }}
               className="bg-white dark:bg-slate-900 rounded-3xl w-full max-w-md shadow-2xl overflow-hidden relative z-10 border border-slate-100 dark:border-slate-800">
               <div className="p-8">

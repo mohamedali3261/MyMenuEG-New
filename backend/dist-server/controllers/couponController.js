@@ -1,5 +1,6 @@
 import prisma from '../lib/prisma';
 import { couponValidationSchema, couponUpsertSchema } from '../utils/schemas';
+import { logAudit } from '../services/auditService';
 export const getCoupons = async (req, res) => {
     try {
         const coupons = await prisma.coupons.findMany({
@@ -44,6 +45,10 @@ export const upsertCoupon = async (req, res) => {
     try {
         const input = couponUpsertSchema.parse(req.body);
         const cpnId = input.id || `CPN-${Date.now()}`;
+        const existedBefore = Boolean(input.id && await prisma.coupons.findUnique({
+            where: { id: String(input.id) },
+            select: { id: true }
+        }));
         await prisma.coupons.upsert({
             where: { id: cpnId },
             create: {
@@ -64,6 +69,7 @@ export const upsertCoupon = async (req, res) => {
                 status: input.status || 'active'
             }
         });
+        await logAudit(existedBefore ? 'update_coupon' : 'create_coupon', req.user?.username || 'system', `${existedBefore ? 'Updated' : 'Created'} coupon: ${cpnId} (${input.code})`);
         res.json({ success: true });
     }
     catch (err) {
@@ -81,6 +87,7 @@ export const deleteCoupon = async (req, res) => {
     try {
         const { id } = req.params;
         await prisma.coupons.delete({ where: { id: String(id) } });
+        await logAudit('delete_coupon', req.user?.username || 'system', `Deleted coupon: ${String(id)}`);
         res.json({ success: true });
     }
     catch (err) {

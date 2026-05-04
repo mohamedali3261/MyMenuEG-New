@@ -15,16 +15,16 @@ export default function OrderTracking() {
 
   const handleTrack = async (e: React.FormEvent) => {
     e.preventDefault();
-    if (!orderId.trim()) return;
+    if (!orderId.trim() || !phone.trim()) return;
     setLoading(true);
     setError('');
     setOrder(null);
     try {
-      const res = await api.get(`/orders/track/${orderId.trim()}`);
+      const res = await api.get(`/orders/track/${orderId.trim()}?phone=${encodeURIComponent(phone.trim())}`);
       setOrder(res.data);
       addTrackedOrder(orderId.trim(), phone.trim());
     } catch {
-      setError(rtl ? 'عذراً، لم نجد طلباً بهذا الرقم.' : 'Sorry, we couldn\'t find an order with this ID.');
+      setError(rtl ? 'عذراً، لم نجد طلباً بهذا الرقم أو رقم الموبايل غير صحيح.' : 'Sorry, we couldn\'t find an order with this ID and phone number.');
     } finally {
       setLoading(false);
     }
@@ -61,7 +61,7 @@ export default function OrderTracking() {
             value={orderId}
             onChange={e => setOrderId(e.target.value)}
             type="text" 
-            placeholder={rtl ? 'أدخل رقم الطلب (مثال: ORD-XXXX)' : 'Enter Order ID (e.g. ORD-XXXX)'}
+            placeholder={rtl ? 'أدخل رقم الطلب (10 أرقام)' : 'Enter Order ID (10 digits)'}
             className="w-full bg-slate-100 dark:bg-white/5 border border-white/10 rounded-2xl py-4 pl-12 pr-6 outline-none focus:ring-2 focus:ring-primary-500 transition-all font-mono"
             dir="ltr"
           />
@@ -71,12 +71,12 @@ export default function OrderTracking() {
             value={phone}
             onChange={e => setPhone(e.target.value)}
             type="tel"
-            placeholder={rtl ? 'رقم الهاتف (اختياري)' : 'Phone number (optional)'}
+            placeholder={rtl ? 'رقم الموبايل (مطلوب)' : 'Phone number (required)'}
             className="w-full bg-slate-100 dark:bg-white/5 border border-white/10 rounded-2xl py-4 px-4 outline-none focus:ring-2 focus:ring-primary-500 transition-all"
             dir="ltr"
           />
         </div>
-        <button disabled={loading} className="btn-primary px-10 py-4 flex items-center justify-center gap-2 text-lg">
+        <button disabled={loading || !orderId.trim() || !phone.trim()} className="btn-primary px-10 py-4 flex items-center justify-center gap-2 text-lg">
           {loading ? <span className="w-6 h-6 border-2 border-white/30 border-t-white rounded-full animate-spin" /> : <Search size={22} />}
           {rtl ? 'تتبع الآن' : 'Track Now'}
         </button>

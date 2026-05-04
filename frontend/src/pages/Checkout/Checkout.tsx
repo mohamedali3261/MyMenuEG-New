@@ -2,7 +2,7 @@ import { useState, useEffect } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
 import { useStore } from '../../store/store';
 import { Link, useNavigate } from 'react-router-dom';
-import { ArrowRight, Loader2, CheckCircle2, MessageCircle, CreditCard, Banknote, Smartphone, Landmark, LayoutList } from 'lucide-react';
+import { ArrowRight, Loader2, CheckCircle2, MessageCircle, CreditCard, Banknote, Smartphone, Landmark, LayoutList, LogIn } from 'lucide-react';
 import { api } from '../../api';
 
 type CartItem = {
@@ -21,7 +21,7 @@ type OrderSuccess = { orderId: string; total: number; discount: number; items: C
 type ApiError = { response?: { data?: { message?: string } } };
 
 export default function Checkout() {
-  const { cart, rtl, clearCart, showToast, addTrackedOrder, paymentSettings, branding } = useStore();
+  const { cart, rtl, clearCart, showToast, addTrackedOrder, paymentSettings, shippingSettings, getShippingCost, branding, customer, customerToken, setCustomer } = useStore();
   const navigate = useNavigate();
   
   const [loading, setLoading] = useState(false);
@@ -50,17 +50,64 @@ export default function Checkout() {
     }
   }, [cart.length, orderSuccess, rtl, branding, navigate]);
 
-  // Persistence: Load from localStorage
+  // Load shipping & payment settings from backend
   useEffect(() => {
-    const saved = localStorage.getItem('mymenueg_shipping');
-    if (saved) {
-      try {
-        setForm(prev => ({ ...prev, ...JSON.parse(saved) }));
-      } catch (e) { console.error("Error loading shipping history", e); }
-    }
+    api.get('/settings').then(res => {
+      if (res.data.payment_settings) {
+        try {
+          const parsed = JSON.parse(res.data.payment_settings);
+          useStore.getState().updatePaymentSettings(parsed);
+        } catch { /* use defaults */ }
+      }
+      if (res.data.shipping_settings) {
+        try {
+          const parsed = typeof res.data.shipping_settings === 'string' ? JSON.parse(res.data.shipping_settings) : res.data.shipping_settings;
+          useStore.getState().updateShippingSettings(parsed);
+        } catch { /* use defaults */ }
+      }
+    }).catch(() => {});
   }, []);
 
-  const saveToHistory = () => {
+  // Load from customer DB data first, then localStorage fallback
+  useEffect(() => {
+    if (customer) {
+      setForm(prev => ({
+        ...prev,
+        name: customer.name || prev.name,
+        phone: customer.phone || prev.phone,
+        governorate: customer.governorate || prev.governorate,
+        city: customer.city || prev.city,
+        address: customer.address || prev.address,
+      }));
+    } else {
+      const saved = localStorage.getItem('mymenueg_shipping');
+      if (saved) {
+        try {
+          setForm(prev => ({ ...prev, ...JSON.parse(saved) }));
+        } catch (e) { console.error("Error loading shipping history", e); }
+      }
+    }
+  }, [customer]);
+
+  const saveToHistory = async () => {
+    // Save delivery data to DB if customer is logged in
+    if (customer && customerToken) {
+      try {
+        const res = await api.patch('/customers/me/delivery', {
+          name: form.name,
+          phone: form.phone,
+          governorate: form.governorate,
+          city: form.city,
+          address: form.address,
+        });
+        if (res.data.success) {
+          setCustomer(res.data.customer, customerToken);
+        }
+      } catch (e) {
+        console.error('Failed to save delivery data to DB', e);
+      }
+    }
+    // Also save to localStorage as fallback for non-logged-in users
     localStorage.setItem('mymenueg_shipping', JSON.stringify({
       name: form.name,
       phone: form.phone,
@@ -80,7 +127,8 @@ export default function Checkout() {
       discount = coupon.value;
     }
   }
-  const total = Math.max(0, subTotal + tax - discount);
+  const shippingCost = getShippingCost(form.governorate, subTotal - discount);
+  const total = Math.max(0, subTotal + tax + shippingCost - discount);
 
   const handleApplyPromo = async () => {
     if (!promoInput.trim()) return;
@@ -112,6 +160,7 @@ export default function Checkout() {
         total_price: total,
         coupon_id: coupon?.id,
         discount_amount: discount,
+        shipping_cost: shippingCost,
         payment_method: paymentMethod
       });
       
@@ -392,10 +441,14 @@ export default function Checkout() {
                     <span>- EGP {discount.toFixed(2)}</span>
                   </div>
                 )}
-                {/* Free shipping text representation */}
+                {/* Shipping cost */}
                 <div className="flex justify-between text-slate-500">
                   <span>{rtl ? 'التوصيل' : 'Delivery'}</span>
-                  <span className="font-bold text-green-500">{rtl ? 'مجاني' : 'Free'}</span>
+                  {shippingCost === 0 ? (
+                    <span className="font-bold text-green-500">{rtl ? 'مجاني' : 'Free'}</span>
+                  ) : (
+                    <span className="font-bold text-slate-900 dark:text-white">EGP {shippingCost.toFixed(2)}</span>
+                  )}
                 </div>
               </div>
 
@@ -424,10 +477,10 @@ export default function Checkout() {
       {/* Success Modal */}
       <AnimatePresence>
         {orderSuccess && (
-          <div className="fixed inset-0 z-[100] flex items-center justify-center p-4">
-             <motion.div 
+          <div className="fixed inset-0 z-[100] flex items-start justify-center pt-20 pb-6 px-4 overflow-y-auto">
+             <motion.div
                initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }}
-               className="absolute inset-0 bg-slate-900/60 backdrop-blur-md"
+               className="fixed inset-0 bg-slate-900/60 backdrop-blur-md"
                onClick={() => setOrderSuccess(null)}
              />
              <motion.div 
@@ -449,6 +502,28 @@ export default function Checkout() {
                    </div>
                    <div className="font-bold text-lg text-primary-500">{rtl ? 'قيد المراجعة' : 'Processing'}</div>
                 </div>
+
+                {/* Login prompt for non-logged-in customers */}
+                {!customerToken && (
+                  <div className="bg-primary-500/10 border border-primary-500/20 rounded-2xl p-4 mb-6 text-start">
+                    <div className="flex items-start gap-3">
+                      <div className="w-10 h-10 rounded-full bg-primary-500/20 flex items-center justify-center shrink-0">
+                        <LogIn size={20} className="text-primary-500" />
+                      </div>
+                      <div>
+                        <h4 className="font-bold text-sm mb-1">{rtl ? 'سجّل دخولك لحفظ طلباتك!' : 'Login to save your orders!'}</h4>
+                        <p className="text-xs text-slate-500 leading-relaxed">{rtl ? 'أنشئ حسابك الخاص لتتبع طلباتك بسهولة وحفظ بياناتك للمرات القادمة' : 'Create your account to easily track orders and save your details for next time'}</p>
+                        <Link
+                          to="/login"
+                          className="inline-flex items-center gap-1.5 mt-2 text-xs font-bold text-primary-500 hover:text-primary-600 transition-colors"
+                        >
+                          <LogIn size={14} />
+                          {rtl ? 'تسجيل الدخول الآن' : 'Login Now'}
+                        </Link>
+                      </div>
+                    </div>
+                  </div>
+                )}
 
                 <div className="flex flex-col gap-3">
                   <button 

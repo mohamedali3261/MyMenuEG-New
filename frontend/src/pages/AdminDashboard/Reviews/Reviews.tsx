@@ -21,7 +21,7 @@ interface Review {
 
 const statusColors = {
   pending: 'bg-yellow-500/10 text-yellow-500 border-yellow-500/20',
-  approved: 'bg-green-500/10 text-green-500 border-green-500/20',
+  approved: 'bg-primary-500/10 text-primary-500 border-primary-500/20',
   rejected: 'bg-red-500/10 text-red-500 border-red-500/20'
 };
 
@@ -191,7 +191,7 @@ export default function Reviews() {
                     <>
                       <button
                         onClick={() => updateStatus(review.id, 'approved')}
-                        className="p-2 rounded-lg bg-green-500/10 text-green-500 hover:bg-green-500/20 transition-colors"
+                        className="p-2 rounded-lg bg-primary-500/10 text-primary-500 hover:bg-primary-500/20 transition-colors"
                         title={rtl ? 'اعتماد' : 'Approve'}
                       >
                         <Check size={16} />

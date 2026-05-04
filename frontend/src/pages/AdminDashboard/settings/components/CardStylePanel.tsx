@@ -1,8 +1,9 @@
 import { useState, useEffect } from 'react';
 import { useStore } from '../../../../store/store';
-import { Paintbrush, CheckCircle2, Palette, MousePointer2, ZoomIn, ArrowUpToLine, Sun, Ban, Save, Loader2 } from 'lucide-react';
+import { Paintbrush, CheckCircle2, Palette, MousePointer2, ZoomIn, ArrowUpToLine, Sun, Ban } from 'lucide-react';
 import { motion } from 'framer-motion';
 import { api } from '../../../../api';
+import SaveButton from '../../../../components/SaveButton';
 
 type CardStyle = 'classic' | 'floating' | 'minimal' | 'reveal' | 'modern';
 type CardHoverAnimation = 'zoom' | 'lift' | 'glow' | 'none';
@@ -67,25 +68,20 @@ export default function CardStylePanel() {
           {rtl ? 'شكل كروت العرض' : 'Product Cards Style'}
         </h2>
         
-        <button
+        <SaveButton
           onClick={handleSave}
-          disabled={isSaving || !hasChanges}
-          className={`flex items-center gap-2 px-5 py-2.5 rounded-xl font-black text-sm transition-all duration-300 ${
-            !hasChanges 
-              ? 'bg-slate-100 dark:bg-white/5 text-slate-400 cursor-not-allowed opacity-50' 
-              : 'bg-primary-500 text-white shadow-lg shadow-primary-500/20 hover:bg-primary-600 hover:scale-105 active:scale-95'
-          }`}
-        >
-          {isSaving ? <Loader2 size={18} className="animate-spin" /> : <Save size={18} />}
-          {rtl ? 'حفظ التغييرات' : 'Save Changes'}
-        </button>
+          isSaving={isSaving}
+          hasChanges={hasChanges}
+          rtl={rtl}
+          color="glass"
+        />
       </div>
 
       <p className="text-slate-500 dark:text-slate-400 mb-8 max-w-2xl">
         {rtl ? 'اختر كيف يظهر تصميم كروت المنتجات لعملائك في الصفحة الرئيسية وصفحة المنتجات:' : 'Choose how the product cards should look to your customers on the Home and Products pages:'}
       </p>
 
-      <div className="grid md:grid-cols-3 gap-6 mb-12">
+      <div className="grid md:grid-cols-5 gap-4 mb-12">
         {styles.map((style) => {
           const isActive = selectedStyle === style.id;
           return (
@@ -94,23 +90,23 @@ export default function CardStylePanel() {
               whileTap={{ scale: 0.98 }}
               key={style.id}
               onClick={() => setSelectedStyle(style.id)}
-              className={`relative flex flex-col p-6 rounded-[2rem] text-center items-center justify-center gap-4 transition-all duration-300 border-2 ${
+              className={`relative flex flex-col p-4 rounded-xl text-center items-center justify-center gap-3 transition-all duration-300 border-2 ${
                 isActive 
                   ? 'border-primary-500 bg-primary-500/10 shadow-[0_0_20px_rgba(16,185,129,0.2)]' 
                   : 'border-slate-200 dark:border-white/10 glass hover:border-primary-400'
               }`}
             >
               {isActive && (
-                 <div className="absolute top-4 right-4 text-primary-500 bg-white rounded-full p-0.5">
-                   <CheckCircle2 size={24} fill="currentColor" />
+                 <div className="absolute top-2 right-2 text-primary-500 bg-white rounded-full p-0.5">
+                   <CheckCircle2 size={16} fill="currentColor" />
                  </div>
               )}
               
-              <div className="w-24 h-24 bg-gradient-to-tr from-primary-500/30 to-accent-500/30 rounded-full flex items-center justify-center shadow-inner mb-2 text-primary-500">
-                <Palette size={48} />
+              <div className="w-14 h-14 bg-gradient-to-tr from-primary-500/30 to-accent-500/30 rounded-full flex items-center justify-center shadow-inner mb-1 text-primary-500">
+                <Palette size={28} />
               </div>
               
-              <h3 className="font-bold text-lg">{style.name}</h3>
+              <h3 className="font-bold text-xs">{style.name}</h3>
             </motion.button>
           )
         })}

@@ -103,10 +103,12 @@ export default function CouponsManager() {
               setFormData({ id: '', code: '', type: 'percent', value: 0, min_order: 0, usage_limit: 100, status: 'active' });
               setShowForm(true);
             }} 
-            className="btn-primary flex items-center gap-2"
+            className="group flex items-center gap-3 px-5 py-2.5 rounded-2xl font-black text-sm transition-all duration-300 bg-primary-500 text-white shadow-lg shadow-primary-500/25 hover:bg-primary-600 hover:shadow-xl hover:shadow-primary-500/30 hover:-translate-y-0.5 active:translate-y-0 dark:bg-primary-600 dark:hover:bg-primary-500"
           >
-            <Plus size={20} />
-            {rtl ? 'إضافة كوبون جديد' : 'Add New Coupon'}
+            <span className="w-7 h-7 rounded-lg bg-white/30 flex items-center justify-center group-hover:rotate-90 transition-transform duration-300">
+              <Plus size={16} strokeWidth={3} />
+            </span>
+            <span>{rtl ? 'إضافة كوبون جديد' : 'Add New Coupon'}</span>
           </button>
         )}
       </div>
@@ -156,7 +158,7 @@ export default function CouponsManager() {
 
            <div className="flex flex-col md:flex-row gap-4 justify-end border-t border-white/10 pt-6">
               <button type="button" onClick={() => setShowForm(false)} className="px-8 py-3 rounded-xl border border-white/10 hover:bg-white/5 transition font-bold">{rtl ? 'إلغاء' : 'Cancel'}</button>
-              <button type="submit" disabled={saving} className="btn-primary px-12 py-3 flex items-center gap-2">
+              <button type="submit" disabled={saving} className="flex items-center gap-2 px-5 py-2.5 rounded-xl font-black text-sm transition-all duration-300 bg-rose-500 text-white shadow-lg shadow-rose-500/20 hover:bg-rose-600 hover:scale-105 active:scale-95">
                 {saving ? <Loader2 size={20} className="animate-spin" /> : <Save size={20} />}
                 {rtl ? 'حفظ الكوبون' : 'Save Coupon'}
               </button>

@@ -26,17 +26,21 @@ const ProductsList = lazy(() => import('./pages/AdminDashboard/products/Products
 const ProductForm = lazy(() => import('./pages/AdminDashboard/products/ProductForm'));
 const CategoriesList = lazy(() => import('./pages/AdminDashboard/categories/CategoriesList'));
 const CustomersList = lazy(() => import('./pages/AdminDashboard/customers/CustomersList'));
+const CustomerDetails = lazy(() => import('./pages/AdminDashboard/customers/CustomerDetails'));
 const SliderManager = lazy(() => import('./pages/AdminDashboard/slider/SliderManager'));
 const CouponsManager = lazy(() => import('./pages/AdminDashboard/coupons/CouponsManager'));
 const OrderTracking = lazy(() => import('./pages/OrderTracking/OrderTracking'));
 const OrdersList = lazy(() => import('./pages/AdminDashboard/orders/OrdersList'));
 const Settings = lazy(() => import('./pages/AdminDashboard/settings/Settings'));
 const Login = lazy(() => import('./pages/AdminDashboard/Login'));
+const Register = lazy(() => import('./pages/AdminDashboard/Register'));
+const MyOrders = lazy(() => import('./pages/MyOrders/MyOrders'));
 const UserManagement = lazy(() => import('./pages/AdminDashboard/UserManagement'));
 const DatabaseBackups = lazy(() => import('./pages/AdminDashboard/database/DatabaseBackups'));
 const PagesManager = lazy(() => import('./pages/AdminDashboard/pages/PagesManager'));
 const OffersManager = lazy(() => import('./pages/AdminDashboard/offers/OffersManager'));
 const ContactPagePanel = lazy(() => import('./pages/AdminDashboard/settings/components/ContactPagePanel'));
+const ContactMessages = lazy(() => import('./pages/AdminDashboard/ContactMessages/ContactMessages'));
 const DynamicPage = lazy(() => import('./pages/DynamicPage/DynamicPage'));
 const Terms = lazy(() => import('./pages/Legal/Terms'));
 const Privacy = lazy(() => import('./pages/Legal/Privacy'));
@@ -44,6 +48,11 @@ const Wishlist = lazy(() => import('./pages/Wishlist/Wishlist'));
 const Checkout = lazy(() => import('./pages/Checkout/Checkout'));
 const PaymentCallback = lazy(() => import('./pages/Payment/PaymentCallback'));
 const PaymentSettingsPanel = lazy(() => import('./pages/AdminDashboard/settings/components/PaymentSettingsPanel'));
+const AuthSettingsPanel = lazy(() => import('./pages/AdminDashboard/settings/components/AuthSettingsPanel'));
+const ShippingSettingsPanel = lazy(() => import('./pages/AdminDashboard/settings/components/ShippingSettingsPanel'));
+const FaqSettingsPanel = lazy(() => import('./pages/AdminDashboard/settings/components/FaqSettingsPanel'));
+const Reviews = lazy(() => import('./pages/AdminDashboard/Reviews/Reviews'));
+const MarqueeManager = lazy(() => import('./pages/AdminDashboard/marquee/MarqueeManager'));
 
 type Hsl = { h: number; s: number; l: number };
 type Rgb = { r: number; g: number; b: number };
@@ -212,6 +221,7 @@ function AppContent() {
           secondaryColor: (settings.secondary_color as string) || '#10b981',
           blendColors: settings.blend_colors === true || settings.blend_colors === 'true',
           lightBgColor: (settings.light_bg_color as string) || '#e2e8f0',
+          navbarStyle: (settings.navbar_style as 'variant1' | 'variant2' | 'variant3') || 'variant1',
           storeName: (settings.store_name as string) || 'MyMenuEG',
           logoUrl: (settings.logo_url as string) || ''
         });
@@ -221,6 +231,9 @@ function AppContent() {
         }
         if (settings.cardHoverAnimation) {
           useStore.getState().setCardHoverAnimation(settings.cardHoverAnimation as any);
+        }
+        if (settings.bundleCardStyle) {
+          useStore.getState().setBundleCardStyle(settings.bundleCardStyle as any);
         }
 
         let parsedLoadingScreen: Partial<typeof loadingScreen> | null = null;
@@ -439,28 +452,36 @@ function AppContent() {
             <Route path="/privacy" element={<Privacy />} />
             <Route path="/wishlist" element={<Wishlist />} />
             <Route path="/payment/callback" element={<PaymentCallback />} />
-            <Route path="/admin/login" element={<Login />} />
+            <Route path="/login" element={<Login />} />
+            <Route path="/register" element={<Register />} />
+            <Route path="/admin/register" element={<Register />} />
             
             <Route path="/admin" element={<ProtectedRoute />}>
               <Route element={<AdminLayout />}>
                 <Route index element={<Overview />} />
                 <Route element={<ProtectedRoute permission="products" />}><Route path="products" element={<ProductsList />} /><Route path="products/new" element={<ProductForm />} /><Route path="products/edit/:id" element={<ProductForm />} /></Route>
                 <Route element={<ProtectedRoute permission="categories" />}><Route path="categories" element={<CategoriesList />} /></Route>
-                <Route element={<ProtectedRoute permission="slides" />}><Route path="slider" element={<SliderManager />} /></Route>
+                <Route element={<ProtectedRoute permission="slides" />}><Route path="slider" element={<SliderManager />} /><Route path="marquee" element={<MarqueeManager />} /></Route>
                 <Route element={<ProtectedRoute permission="orders" />}><Route path="orders" element={<OrdersList />} /></Route>
-                <Route element={<ProtectedRoute permission="customers" />}><Route path="customers" element={<CustomersList />} /></Route>
+                <Route element={<ProtectedRoute permission="customers" />}><Route path="customers" element={<CustomersList />} /><Route path="customers/:id" element={<CustomerDetails />} /></Route>
                 <Route element={<ProtectedRoute permission="coupons" />}><Route path="coupons" element={<CouponsManager />} /></Route>
                 <Route element={<ProtectedRoute permission="users" />}><Route path="users" element={<UserManagement />} /><Route path="database" element={<DatabaseBackups />} /></Route>
                 <Route element={<ProtectedRoute permission="pages" />}><Route path="pages" element={<PagesManager />} /></Route>
+                <Route element={<ProtectedRoute permission="reviews" />}><Route path="reviews" element={<Reviews />} /></Route>
                 <Route element={<ProtectedRoute permission="settings" />}>
                   <Route path="offers" element={<OffersManager />} />
+                  <Route path="messages" element={<ContactMessages />} />
                   <Route path="settings" element={<Settings />} />
                   <Route path="contact" element={<div className="max-w-4xl mx-auto"><ContactPagePanel /></div>} />
+                  <Route path="faq" element={<div className="max-w-4xl mx-auto"><FaqSettingsPanel /></div>} />
                   <Route path="payment" element={<PaymentSettingsPanel />} />
+                  <Route path="shipping" element={<ShippingSettingsPanel />} />
+                  <Route path="auth" element={<AuthSettingsPanel />} />
                 </Route>
               </Route>
             </Route>
             <Route path="/track" element={<OrderTracking />} />
+            <Route path="/my-orders" element={<MyOrders />} />
             <Route path="*" element={<NotFound />} />
           </Routes>
         </Suspense>

@@ -33,6 +33,12 @@ interface ProductItem {
   old_price: number;
   stock: number;
   status?: string;
+  bundle_items?: Array<{
+    product_id: string;
+    quantity: number;
+    discount?: number;
+    product?: { price: number };
+  }>;
 }
 
 export default function ProductsTable({ 
@@ -88,18 +94,18 @@ export default function ProductsTable({
           <table className="w-full text-left" dir={rtl ? 'rtl' : 'ltr'}>
             <thead className="bg-slate-100/30 dark:bg-black/40 border-b border-slate-200 dark:border-white/10">
               <tr>
-                <th className="px-6 py-5 font-bold text-[10px] uppercase tracking-widest text-slate-500 dark:text-slate-400">{rtl ? 'المنتج' : 'Product'}</th>
-                <th className="px-6 py-5 font-bold text-[10px] uppercase tracking-widest text-slate-500 dark:text-slate-400 hidden lg:table-cell">{rtl ? 'التصنيف' : 'Category'}</th>
-                <th className="px-6 py-5 font-bold text-[10px] uppercase tracking-widest text-slate-500 dark:text-slate-400">{rtl ? 'السعر' : 'Price'}</th>
-                <th className="px-6 py-5 font-bold text-[10px] uppercase tracking-widest text-slate-500 dark:text-slate-400 hidden lg:table-cell">{rtl ? 'المخزون' : 'Stock'}</th>
-                <th className="px-6 py-5 font-bold text-[10px] uppercase tracking-widest text-slate-500 dark:text-slate-400">{rtl ? 'الحالة' : 'Status'}</th>
+                <th className="px-6 py-5 font-bold text-[10px] uppercase tracking-widest text-slate-500 dark:text-slate-400 border-e border-slate-200 dark:border-white/10">{rtl ? 'المنتج' : 'Product'}</th>
+                <th className="px-6 py-5 font-bold text-[10px] uppercase tracking-widest text-slate-500 dark:text-slate-400 hidden lg:table-cell border-e border-slate-200 dark:border-white/10">{rtl ? 'التصنيف' : 'Category'}</th>
+                <th className="px-6 py-5 font-bold text-[10px] uppercase tracking-widest text-slate-500 dark:text-slate-400 border-e border-slate-200 dark:border-white/10">{rtl ? 'السعر' : 'Price'}</th>
+                <th className="px-6 py-5 font-bold text-[10px] uppercase tracking-widest text-slate-500 dark:text-slate-400 hidden lg:table-cell border-e border-slate-200 dark:border-white/10">{rtl ? 'المخزون' : 'Stock'}</th>
+                <th className="px-6 py-5 font-bold text-[10px] uppercase tracking-widest text-slate-500 dark:text-slate-400 border-e border-slate-200 dark:border-white/10">{rtl ? 'الحالة' : 'Status'}</th>
                 <th className="px-6 py-5 font-bold text-[10px] uppercase tracking-widest text-slate-500 dark:text-slate-400 text-center">{rtl ? 'إجراءات' : 'Actions'}</th>
               </tr>
             </thead>
             <tbody className="divide-y divide-slate-200 dark:divide-white/5">
               {products.map((product) => (
                 <tr key={product.id} className="group hover:bg-primary-500/5 dark:hover:bg-primary-500/10 transition-all duration-300">
-                  <td className="px-6 py-5">
+                  <td className="px-6 py-5 border-e border-slate-100 dark:border-white/5">
                     <div className="flex items-center gap-4">
                       {product.image_url ? (
                         <div className="w-12 h-12 rounded-xl overflow-hidden ring-1 ring-white/20 shadow-lg shrink-0">
@@ -118,20 +124,45 @@ export default function ProductsTable({
                       </div>
                     </div>
                   </td>
-                  <td className="px-6 py-5 hidden lg:table-cell">
+                  <td className="px-6 py-5 hidden lg:table-cell border-e border-slate-100 dark:border-white/5">
                     <span className="text-[9px] font-black uppercase tracking-[0.2em] bg-primary-500/10 text-primary-600 dark:text-primary-400 px-3 py-1.5 rounded-full border border-primary-500/20 whitespace-nowrap">
                       {product.cat_name_ar ? (rtl ? product.cat_name_ar : product.cat_name_en) : (rtl ? '-- غير مصنف --' : '-- Uncategorized --')}
                     </span>
                   </td>
-                  <td className="px-6 py-5 font-bold">
+                  <td className="px-6 py-5 font-bold border-e border-slate-100 dark:border-white/5">
                      <div className="flex flex-col">
-                        <div className="text-sm text-slate-900 dark:text-white">{product.price?.toLocaleString()} <span className="text-[9px] font-black opacity-50 uppercase tracking-tighter">EGP</span></div>
-                        {product.old_price > product.price && (
-                           <span className="text-[10px] text-slate-400 line-through opacity-60 font-black italic">{product.old_price.toLocaleString()}</span>
-                        )}
+                        {(() => {
+                          const isBundle = product.bundle_items && product.bundle_items.length > 0;
+                          const bundleOriginal = isBundle
+                            ? product.bundle_items!.reduce((sum, bi) => sum + ((bi.product?.price || 0) * bi.quantity), 0)
+                            : 0;
+                          const bundleTotal = isBundle
+                            ? product.bundle_items!.reduce((sum, bi) => sum + (((bi.product?.price || 0) - (bi.discount || 0)) * bi.quantity), 0)
+                            : 0;
+                          const displayPrice = isBundle && product.price === 0 ? bundleTotal : product.price;
+                          return (
+                            <>
+                              <div className="flex items-center gap-2">
+                                <span className="text-sm text-slate-900 dark:text-white">{displayPrice?.toLocaleString()} <span className="text-[9px] font-black opacity-50 uppercase tracking-tighter">EGP</span></span>
+                                {isBundle && (
+                                  <span className="text-[8px] font-black bg-rose-500/10 text-rose-500 px-1.5 py-0.5 rounded-full">{rtl ? 'باقة' : 'Bundle'}</span>
+                                )}
+                              </div>
+                              {isBundle && bundleOriginal > bundleTotal && (
+                                <span className="text-[10px] text-slate-400 line-through opacity-60 font-black italic">{bundleOriginal.toLocaleString()} EGP</span>
+                              )}
+                              {!isBundle && product.old_price > displayPrice && (
+                                <span className="text-[10px] text-slate-400 line-through opacity-60 font-black italic">{product.old_price.toLocaleString()}</span>
+                              )}
+                              {isBundle && bundleTotal > 0 && product.price === 0 && (
+                                <span className="text-[8px] text-amber-500 font-black">{rtl ? `إجمالي ${product.bundle_items!.length} منتجات` : `${product.bundle_items!.length} items total`}</span>
+                              )}
+                            </>
+                          );
+                        })()}
                      </div>
                   </td>
-                  <td className="px-6 py-5 hidden lg:table-cell">
+                  <td className="px-6 py-5 hidden lg:table-cell border-e border-slate-100 dark:border-white/5">
                     <div className="flex flex-col gap-1.5 w-24">
                       <div className="flex items-center justify-between text-[9px] font-black tracking-widest">
                         <span className={product.stock < 10 ? 'text-rose-500' : 'text-slate-500'}>{product.stock} {rtl ? 'قطعة' : 'PCS'}</span>
@@ -141,7 +172,7 @@ export default function ProductsTable({
                       </div>
                     </div>
                   </td>
-                  <td className="px-6 py-5">
+                  <td className="px-6 py-5 border-e border-slate-100 dark:border-white/5">
                     <PremiumDropdown 
                       value={normalizeStatus(product.status)} 
                       options={statusOptions}
@@ -194,10 +225,30 @@ export default function ProductsTable({
                   <span className={`text-[8px] font-black ${product.stock < 10 ? 'text-rose-500' : 'text-slate-500'}`}>{product.stock} {rtl ? 'قطعة' : 'Units'}</span>
                 </div>
                 <div className="mt-2 flex items-baseline gap-2">
-                  <span className="text-sm font-extrabold text-primary-500">EGP {product.price?.toLocaleString()}</span>
-                  {product.old_price > product.price && (
-                    <span className="text-[9px] text-slate-400 line-through font-black italic">{product.old_price.toLocaleString()}</span>
-                  )}
+                  {(() => {
+                    const isBundle = product.bundle_items && product.bundle_items.length > 0;
+                    const bundleOriginal = isBundle
+                      ? product.bundle_items!.reduce((sum: number, bi: any) => sum + ((bi.product?.price || 0) * bi.quantity), 0)
+                      : 0;
+                    const bundleTotal = isBundle
+                      ? product.bundle_items!.reduce((sum: number, bi: any) => sum + (((bi.product?.price || 0) - (bi.discount || 0)) * bi.quantity), 0)
+                      : 0;
+                    const displayPrice = isBundle && product.price === 0 ? bundleTotal : product.price;
+                    return (
+                      <>
+                        <span className="text-sm font-extrabold text-primary-500">EGP {displayPrice?.toLocaleString()}</span>
+                        {isBundle && (
+                          <span className="text-[8px] font-black bg-rose-500/10 text-rose-500 px-1.5 py-0.5 rounded-full">{rtl ? 'باقة' : 'Bundle'}</span>
+                        )}
+                        {isBundle && bundleOriginal > bundleTotal && (
+                          <span className="text-[9px] text-slate-400 line-through font-black italic">{bundleOriginal.toLocaleString()}</span>
+                        )}
+                        {!isBundle && product.old_price > displayPrice && (
+                          <span className="text-[9px] text-slate-400 line-through font-black italic">{product.old_price.toLocaleString()}</span>
+                        )}
+                      </>
+                    );
+                  })()}
                 </div>
               </div>
             </div>

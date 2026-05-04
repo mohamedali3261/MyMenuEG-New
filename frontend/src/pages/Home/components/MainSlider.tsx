@@ -24,6 +24,7 @@ export default function MainSlider({ pageId }: { pageId?: string }) {
   const [direction, setDirection] = useState(1);
   const [loading, setLoading] = useState(true);
   const [intervalTime, setIntervalTime] = useState(3000);
+  const [hideEmpty, setHideEmpty] = useState(false);
   const containerRef = useRef<HTMLElement>(null);
   const prefersReducedMotion = useReducedMotion();
 
@@ -42,6 +43,9 @@ export default function MainSlider({ pageId }: { pageId?: string }) {
 
       if (settings?.sliderInterval) {
         setIntervalTime(Number(settings.sliderInterval) * 1000);
+      }
+      if (settings?.hideEmptySlider) {
+        setHideEmpty(settings.hideEmptySlider === 'true');
       }
     } catch (err) {
       console.error('Failed to fetch slides', err);
@@ -82,6 +86,7 @@ export default function MainSlider({ pageId }: { pageId?: string }) {
   }
 
   if (slides.length === 0) {
+    if (hideEmpty) return null;
     return (
       <section className="relative w-full h-screen flex items-center justify-center p-6 bg-slate-100 dark:bg-slate-900 overflow-hidden">
         {/* Abstract Blobs for Empty State */}

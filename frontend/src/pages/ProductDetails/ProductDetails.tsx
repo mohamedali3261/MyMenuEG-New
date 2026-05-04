@@ -18,9 +18,10 @@ import ProductSections from './components/ProductSections';
 import ProductTrustBadges from './components/ProductTrustBadges';
 import FrequentlyBoughtTogether from './components/FrequentlyBoughtTogether';
 import ProductCard from '../../components/ProductCard';
+import ProductReviews from './components/ProductReviews';
 
 type QuantityVariant = { quantity_label: string; price: number; old_price?: number };
-type RealVariant = { label_ar?: string; label_en?: string; sku?: string; price: number; old_price?: number; stock?: number; is_default?: boolean; image_url?: string; imageUrl?: string };
+type RealVariant = { label_ar?: string; label_en?: string; sku?: string; price: number; old_price?: number; stock?: number; is_default?: boolean; image_url?: string; imageUrl?: string; images?: string[] };
 
 export default function ProductDetails() {
   const { id } = useParams();
@@ -215,6 +216,9 @@ export default function ProductDetails() {
           extraDetails={product.detail_items}
           faqs={product.faqs}
         />
+
+        {/* Product Reviews */}
+        <ProductReviews productId={product.id} />
 
         {/* Related Products */}
         {related.length > 0 && (

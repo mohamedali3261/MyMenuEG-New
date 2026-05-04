@@ -1,7 +1,8 @@
 import { useState, useEffect } from 'react';
 import { useStore } from '../../../../store/store';
-import { CreditCard, Save, Loader2, ToggleLeft, ToggleRight, Wallet, Landmark, Smartphone, Banknote, ShieldCheck, AlertTriangle } from 'lucide-react';
+import { CreditCard, Loader2, Wallet, Landmark, Smartphone, Banknote, ShieldCheck, AlertTriangle } from 'lucide-react';
 import { api } from '../../../../api';
+import SaveButton from '../../../../components/SaveButton';
 
 type ToggleSwitchProps = {
   enabled: boolean;
@@ -9,7 +10,6 @@ type ToggleSwitchProps = {
   label: string;
   description: string;
   icon: React.ComponentType<{ size?: number; className?: string }>;
-  color?: string;
 };
 
 export default function PaymentSettingsPanel() {
@@ -48,10 +48,10 @@ export default function PaymentSettingsPanel() {
     setForm(prev => ({ ...prev, [field]: !prev[field] }));
   };
 
-  const ToggleSwitch = ({ enabled, onToggle, label, description, icon: Icon, color = 'primary' }: ToggleSwitchProps) => (
-    <div className={`flex items-center justify-between p-5 rounded-2xl border transition-all ${enabled ? `bg-${color}-500/5 border-${color}-500/20` : 'bg-slate-50 dark:bg-white/5 border-slate-200 dark:border-white/10'}`}>
+  const ToggleSwitch = ({ enabled, onToggle, label, description, icon: Icon }: ToggleSwitchProps) => (
+    <div className={`flex items-center justify-between p-5 rounded-2xl border transition-all ${enabled ? 'bg-primary-500/5 border-primary-500/20' : 'bg-slate-50 dark:bg-white/5 border-slate-200 dark:border-white/10'}`}>
       <div className="flex items-center gap-4">
-        <div className={`w-12 h-12 rounded-xl flex items-center justify-center ${enabled ? `bg-${color}-500/10 text-${color}-500` : 'bg-slate-100 dark:bg-white/10 text-slate-400'}`}>
+        <div className={`w-12 h-12 rounded-xl flex items-center justify-center ${enabled ? 'bg-primary-500/10 text-primary-500' : 'bg-slate-100 dark:bg-white/10 text-slate-400'}`}>
           <Icon size={22} />
         </div>
         <div>
@@ -59,12 +59,10 @@ export default function PaymentSettingsPanel() {
           <p className="text-xs text-slate-400 mt-0.5">{description}</p>
         </div>
       </div>
-      <button onClick={onToggle} className="transition-all active:scale-90">
-        {enabled ? (
-          <ToggleRight size={36} className="text-green-500" />
-        ) : (
-          <ToggleLeft size={36} className="text-slate-400" />
-        )}
+      <button onClick={onToggle} className={`relative w-14 h-8 rounded-full transition-all duration-300 ease-out ${enabled ? 'bg-gradient-to-r from-primary-500 to-primary-600 shadow-lg shadow-primary-500/30' : 'bg-slate-300 dark:bg-slate-600'}`}>
+        <span className={`absolute top-1 left-1 w-6 h-6 bg-white rounded-full shadow-lg transition-all duration-300 ease-out flex items-center justify-center ${enabled ? 'translate-x-6 shadow-primary-500/20' : 'translate-x-0'}`}>
+          {enabled && <span className="text-primary-500 text-xs font-bold">✓</span>}
+        </span>
       </button>
     </div>
   );
@@ -80,10 +78,10 @@ export default function PaymentSettingsPanel() {
       </p>
 
       {/* Master Switch */}
-      <div className={`glass-card p-6 mb-8 border-2 transition-all ${form.onlinePaymentEnabled ? 'border-green-500/30' : 'border-slate-200 dark:border-white/10'}`}>
+      <div className={`glass-card p-6 mb-8 border-2 transition-all ${form.onlinePaymentEnabled ? 'border-primary-500/30' : 'border-slate-200 dark:border-white/10'}`}>
         <div className="flex items-center justify-between">
           <div className="flex items-center gap-4">
-            <div className={`w-14 h-14 rounded-2xl flex items-center justify-center ${form.onlinePaymentEnabled ? 'bg-green-500/10 text-green-500' : 'bg-slate-100 dark:bg-white/10 text-slate-400'}`}>
+            <div className={`w-14 h-14 rounded-2xl flex items-center justify-center ${form.onlinePaymentEnabled ? 'bg-primary-500/10 text-primary-500' : 'bg-slate-100 dark:bg-white/10 text-slate-400'}`}>
               <CreditCard size={28} />
             </div>
             <div>
@@ -97,13 +95,11 @@ export default function PaymentSettingsPanel() {
           </div>
           <button 
             onClick={() => toggleField('onlinePaymentEnabled')}
-            className="transition-all active:scale-90"
+            className={`relative w-16 h-9 rounded-full transition-all duration-300 ease-out ${form.onlinePaymentEnabled ? 'bg-gradient-to-r from-primary-500 to-primary-600 shadow-lg shadow-primary-500/30' : 'bg-slate-300 dark:bg-slate-600'}`}
           >
-            {form.onlinePaymentEnabled ? (
-              <ToggleRight size={48} className="text-green-500" />
-            ) : (
-              <ToggleLeft size={48} className="text-slate-400" />
-            )}
+            <span className={`absolute top-1 left-1 w-7 h-7 bg-white rounded-full shadow-lg transition-all duration-300 ease-out flex items-center justify-center ${form.onlinePaymentEnabled ? 'translate-x-7 shadow-primary-500/20' : 'translate-x-0'}`}>
+              {form.onlinePaymentEnabled && <span className="text-primary-500 text-xs font-bold">✓</span>}
+            </span>
           </button>
         </div>
       </div>
@@ -155,7 +151,7 @@ export default function PaymentSettingsPanel() {
       {form.onlinePaymentEnabled && (
         <div className="glass-card p-6 mb-8">
           <h3 className="font-bold text-lg mb-2 flex items-center gap-2">
-            <ShieldCheck size={20} className="text-green-500" />
+            <ShieldCheck size={20} className="text-primary-500" />
             {rtl ? 'مفاتيح API (اختياري)' : 'API Keys (Optional)'}
           </h3>
           <p className="text-xs text-slate-400 mb-6">
@@ -228,14 +224,13 @@ export default function PaymentSettingsPanel() {
       )}
 
       {/* Save */}
-      <button
+      <SaveButton
         onClick={handleSave}
-        disabled={loading}
-        className="w-full btn-primary flex items-center justify-center gap-2 h-14 text-lg shadow-xl shadow-primary-500/20"
-      >
-        {loading ? <Loader2 className="animate-spin" /> : <Save size={20} />}
-        {rtl ? 'حفظ إعدادات الدفع' : 'Save Payment Settings'}
-      </button>
+        isSaving={loading}
+        rtl={rtl}
+        color="glass"
+        checkHasChanges={false}
+      />
     </div>
   );
 }

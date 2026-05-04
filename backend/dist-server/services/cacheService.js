@@ -1,9 +1,35 @@
 import { logger } from '../utils/logger';
+import Redis from 'ioredis';
 const defaultTtlSeconds = Number(process.env.CACHE_TTL_SECONDS || 120);
+const redisUrl = process.env.REDIS_URL;
+// Redis client with error handling
+let redis = null;
+if (redisUrl) {
+    try {
+        redis = new Redis(redisUrl, {
+            maxRetriesPerRequest: 1,
+            retryStrategy: (times) => (times > 3 ? null : Math.min(times * 100, 2000)),
+        });
+        redis.on('error', (err) => logger.warn(`Redis connection error: ${err.message}`));
+    }
+    catch (err) {
+        logger.warn(`Failed to initialize Redis: ${err}`);
+    }
+}
 const memoryCache = new Map();
 const revalidateLocks = new Set();
 const buildKey = (scope, key) => `cache:${scope}:${key}`;
 const readRaw = async (fullKey) => {
+    // Try Redis first
+    if (redis) {
+        try {
+            return await redis.get(fullKey);
+        }
+        catch (err) {
+            logger.warn(`Redis get failed, falling back to memory: ${err}`);
+        }
+    }
+    // Fallback to memory
     const item = memoryCache.get(fullKey);
     if (!item)
         return null;
@@ -14,6 +40,16 @@ const readRaw = async (fullKey) => {
     return item.value;
 };
 const writeRaw = async (fullKey, value, ttlSeconds) => {
+    // Write to Redis
+    if (redis) {
+        try {
+            await redis.set(fullKey, value, 'EX', ttlSeconds);
+        }
+        catch (err) {
+            logger.warn(`Redis set failed: ${err}`);
+        }
+    }
+    // Always write to memory as secondary/fallback
     memoryCache.set(fullKey, {
         value,
         expiresAt: Date.now() + ttlSeconds * 1000,
@@ -40,6 +76,13 @@ const parseEnvelope = (raw) => {
     catch {
         return null;
     }
+};
+export const getCacheStatus = () => {
+    return {
+        type: redis ? 'redis' : 'memory',
+        connected: redis ? redis.status === 'ready' : true,
+        memoryItems: memoryCache.size
+    };
 };
 export const cacheSetSWR = async (scope, key, value, freshTtlSeconds = defaultTtlSeconds, staleTtlSeconds = 300) => {
     const now = Date.now();
@@ -82,6 +125,19 @@ export const cacheResolveSWR = async (scope, key, loader, freshTtlSeconds = defa
 };
 export const cacheInvalidateScope = async (scope) => {
     const prefix = buildKey(scope, '');
+    // Invalidate Redis
+    if (redis) {
+        try {
+            const keys = await redis.keys(`${prefix}*`);
+            if (keys.length > 0) {
+                await redis.del(...keys);
+            }
+        }
+        catch (err) {
+            logger.warn(`Redis invalidation failed: ${err}`);
+        }
+    }
+    // Invalidate Memory
     for (const key of memoryCache.keys()) {
         if (key.startsWith(prefix)) {
             memoryCache.delete(key);

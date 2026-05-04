@@ -1,8 +1,9 @@
 import { useState, useEffect } from 'react';
 import { useStore } from '../../../../store/store';
 import { api } from '../../../../api';
-import { AlertCircle, Save, Loader2 } from 'lucide-react';
+import { AlertCircle } from 'lucide-react';
 import toast from 'react-hot-toast';
+import SaveButton from '../../../../components/SaveButton';
 
 export default function NotFoundSettingsPanel() {
   const { rtl, notfoundSettings, updateNotFoundSettings } = useStore();
@@ -68,14 +69,13 @@ export default function NotFoundSettingsPanel() {
       </div>
 
       <div className="mt-8 flex justify-end">
-        <button
+        <SaveButton
           onClick={handleSave}
-          disabled={saving}
-          className="flex items-center gap-2 px-6 py-3 bg-red-500 text-white rounded-xl hover:bg-red-600 transition-colors disabled:opacity-50"
-        >
-          {saving ? <Loader2 size={20} className="animate-spin" /> : <Save size={20} />}
-          {rtl ? 'حفظ التغييرات' : 'Save Changes'}
-        </button>
+          isSaving={saving}
+          rtl={rtl}
+          color="glass"
+          checkHasChanges={false}
+        />
       </div>
     </div>
   );

@@ -1,9 +1,10 @@
 import { useState, useEffect } from 'react';
 import { useStore } from '../../../../store/store';
 import { api } from '../../../../api';
-import { MessageSquare, Phone, Mail, MapPin, Clock, Type, Send, Loader2, CheckCircle2, Globe, Sparkles, Share2 } from 'lucide-react';
+import { MessageSquare, Phone, Mail, MapPin, Clock, Type, Send, CheckCircle2, Globe, Sparkles, Share2 } from 'lucide-react';
 import { motion } from 'framer-motion';
 import toast from 'react-hot-toast';
+import SaveButton from '../../../../components/SaveButton';
 
 type IconComponent = React.ComponentType<{ size?: number; className?: string }>;
 
@@ -206,16 +207,13 @@ export default function ContactPagePanel() {
 
       {/* Save Button Container */}
       <div className="mt-12 pt-8 border-t border-slate-200 dark:border-white/10 flex justify-end">
-         <motion.button 
-          whileHover={{ scale: 1.02 }}
-          whileTap={{ scale: 0.98 }}
+         <SaveButton
           onClick={handleSave}
-          disabled={loading}
-          className={`flex items-center gap-3 px-10 py-4 bg-primary-500 text-white rounded-2xl font-bold tracking-wide shadow-xl shadow-primary-500/20 transition-all ${loading ? 'opacity-70 cursor-not-allowed' : 'hover:bg-primary-600'}`}
-         >
-           {loading ? <Loader2 className="animate-spin" size={20} /> : <CheckCircle2 size={20} />}
-           {rtl ? 'حفظ إعدادات صفحة التواصل' : 'Save Contact Settings'}
-         </motion.button>
+          isSaving={loading}
+          rtl={rtl}
+          color="glass"
+          checkHasChanges={false}
+         />
       </div>
     </motion.div>
   );

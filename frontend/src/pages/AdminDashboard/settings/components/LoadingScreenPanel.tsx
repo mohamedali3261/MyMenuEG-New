@@ -1,8 +1,9 @@
 import { useState, useEffect } from 'react';
 import { useStore } from '../../../../store/store';
 import { api } from '../../../../api';
-import { Image as ImageIcon, Upload, Loader2, CheckCircle2, Zap, Clock } from 'lucide-react';
+import { Image as ImageIcon, Upload, CheckCircle2, Zap, Clock } from 'lucide-react';
 import { motion } from 'framer-motion';
+import SaveButton from '../../../../components/SaveButton';
 
 export default function LoadingScreenPanel() {
   const { rtl, loadingScreen, updateLoadingScreen, showToast } = useStore();
@@ -164,14 +165,14 @@ export default function LoadingScreenPanel() {
       )}
 
       <div className="mt-10 pt-6 border-t border-white/10 flex justify-end">
-         <button 
+         <SaveButton
           onClick={handleSave}
-          disabled={loading}
-          className="btn-accent px-10 py-3 flex items-center gap-2 shadow-lg shadow-accent-500/20"
-         >
-           {loading ? <Loader2 className="animate-spin" /> : <CheckCircle2 size={20} />}
-           {rtl ? 'حفظ الإعدادات' : 'Save Settings'}
-         </button>
+          isSaving={loading}
+          rtl={rtl}
+          color="glass"
+          checkHasChanges={false}
+          glass={false}
+         />
       </div>
     </motion.div>
   );

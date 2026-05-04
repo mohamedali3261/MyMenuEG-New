@@ -1,23 +1,49 @@
 import { motion } from 'framer-motion';
 import { useStore } from '../../store/store';
-import { CheckCircle2, XCircle, ArrowRight, ShoppingBag } from 'lucide-react';
+import { CheckCircle2, XCircle, ArrowRight, ShoppingBag, LogIn } from 'lucide-react';
 import { Link, useSearchParams } from 'react-router-dom';
-import { useEffect } from 'react';
+import { useEffect, useState } from 'react';
+import { api } from '../../api';
 
 export default function PaymentCallback() {
-  const { rtl, branding } = useStore();
+  const { rtl, branding, customerToken } = useStore();
   const [searchParams] = useSearchParams();
+  const [verified, setVerified] = useState<boolean | null>(null);
   
-  const status = searchParams.get('status') || 'success'; // success | failed
+  const status = searchParams.get('status') || 'success';
   const orderId = searchParams.get('order_id') || '';
   const amount = searchParams.get('amount') || '0';
   const method = searchParams.get('method') || 'card';
 
-  const isSuccess = status === 'success';
+  const isSuccess = verified !== null ? verified : status === 'success';
 
   useEffect(() => {
     document.title = `${isSuccess ? (rtl ? 'تم الدفع بنجاح' : 'Payment Successful') : (rtl ? 'فشل الدفع' : 'Payment Failed')} | ${branding.storeName}`;
   }, [isSuccess, rtl, branding]);
+
+  // Verify payment status from backend
+  useEffect(() => {
+    if (!orderId) {
+      setVerified(status === 'success');
+      return;
+    }
+    api.get(`/payment/status/${orderId}`)
+      .then(res => {
+        const paymentStatus = res.data.payment_status;
+        if (paymentStatus === 'paid') {
+          setVerified(true);
+        } else if (paymentStatus === 'failed') {
+          setVerified(false);
+        } else {
+          // Pending or unknown - trust URL param for now
+          setVerified(status === 'success');
+        }
+      })
+      .catch(() => {
+        // API failed - fall back to URL param
+        setVerified(status === 'success');
+      });
+  }, [orderId, status]);
 
   return (
     <div className="min-h-screen flex items-center justify-center py-12 relative overflow-hidden">
@@ -69,6 +95,28 @@ export default function PaymentCallback() {
               <div className="flex justify-between text-sm">
                 <span className="text-slate-400">{rtl ? 'طريقة الدفع' : 'Payment Method'}</span>
                 <span className="font-bold capitalize">{method}</span>
+              </div>
+            </div>
+          )}
+
+          {/* Login prompt for non-logged-in customers */}
+          {isSuccess && !customerToken && (
+            <div className="bg-primary-500/10 border border-primary-500/20 rounded-2xl p-4 mb-6 text-start">
+              <div className="flex items-start gap-3">
+                <div className="w-10 h-10 rounded-full bg-primary-500/20 flex items-center justify-center shrink-0">
+                  <LogIn size={20} className="text-primary-500" />
+                </div>
+                <div>
+                  <h4 className="font-bold text-sm mb-1">{rtl ? 'سجّل دخولك لحفظ طلباتك!' : 'Login to save your orders!'}</h4>
+                  <p className="text-xs text-slate-500 leading-relaxed">{rtl ? 'أنشئ حسابك الخاص لتتبع طلباتك بسهولة وحفظ بياناتك للمرات القادمة' : 'Create your account to easily track orders and save your details for next time'}</p>
+                  <Link
+                    to="/login"
+                    className="inline-flex items-center gap-1.5 mt-2 text-xs font-bold text-primary-500 hover:text-primary-600 transition-colors"
+                  >
+                    <LogIn size={14} />
+                    {rtl ? 'تسجيل الدخول الآن' : 'Login Now'}
+                  </Link>
+                </div>
               </div>
             </div>
           )}

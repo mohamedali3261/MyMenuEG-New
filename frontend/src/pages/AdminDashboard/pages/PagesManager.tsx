@@ -16,7 +16,7 @@ export default function PagesManager() {
   const [reordering, setReordering] = useState(false);
 
   // Form State
-  const defaultForm = { id: '', name_ar: '', name_en: '', slug: '', show_in_navbar: 1, order_index: 0, status: 'active', meta_title: '', meta_desc: '', banner_url: '', banner_size: 'medium', spotlight_product_id: '', countdown_end_date: '', show_search: false };
+  const defaultForm = { id: '', name_ar: '', name_en: '', slug: '', show_in_navbar: 1, order_index: 0, status: 'active', meta_title: '', meta_desc: '', banner_url: '', banner_size: 'medium', spotlight_product_id: '', countdown_end_date: '', show_search: false, image_url: '' };
   const [formData, setFormData] = useState(defaultForm);
   const [isEditing, setIsEditing] = useState(false);
   const [spotlightSearch, setSpotlightSearch] = useState('');
@@ -97,7 +97,8 @@ export default function PagesManager() {
       banner_size: page.banner_size || 'medium',
       spotlight_product_id: page.spotlight_product_id || '',
       countdown_end_date: page.countdown_end_date ? new Date(page.countdown_end_date).toISOString().slice(0,16) : '',
-      show_search: !!page.show_search
+      show_search: !!page.show_search,
+      image_url: page.image_url || ''
     });
     setIsEditing(true);
     window.scrollTo({ top: 0, behavior: 'smooth' });
@@ -374,14 +375,16 @@ export default function PagesManager() {
                          <h5 className="text-sm font-bold">{rtl ? 'تفعيل البحث الداخلي' : 'Enable Internal Search'}</h5>
                          <p className="text-[10px] text-slate-500">{rtl ? 'يظهر شريط بحث خاص لمنتجات هذه الصفحة.' : 'Shows a custom search bar for this page products.'}</p>
                        </div>
-                       <button type="button" className={`relative flex items-center ${formData.show_search ? 'justify-end bg-primary-500/20' : 'justify-start bg-slate-200 dark:bg-white/10'} w-12 h-6 rounded-full p-1 transition-colors`}>
-                         <div className={`w-4 h-4 rounded-full ${formData.show_search ? 'bg-primary-500' : 'bg-slate-400 dark:bg-slate-500'}`} />
+                       <button type="button" onClick={(e) => { e.stopPropagation(); setFormData({...formData, show_search: !formData.show_search}) }} className={`relative flex items-center w-12 h-6 rounded-full transition-all duration-300 ease-out ${formData.show_search ? 'bg-gradient-to-r from-primary-500 to-primary-600 shadow-lg shadow-primary-500/30' : 'bg-slate-300 dark:bg-slate-600'}`}>
+                         <span className={`absolute top-0.5 left-0.5 w-5 h-5 bg-white rounded-full shadow-lg transition-all duration-300 ease-out flex items-center justify-center ${formData.show_search ? 'translate-x-6 shadow-primary-500/20' : 'translate-x-0'}`}>
+                           {formData.show_search && <span className="text-primary-500 text-[10px] font-bold">✓</span>}
+                         </span>
                        </button>
                     </div>
                  </div>
               </div>
 
-              <button onClick={handleCreateOrUpdate} disabled={saving} className="btn-primary w-full flex items-center justify-center gap-2 mt-4 py-4 rounded-xl text-md shadow-lg shadow-primary-500/20">
+              <button onClick={handleCreateOrUpdate} disabled={saving} className="flex items-center justify-center gap-2 px-5 py-2.5 rounded-xl font-black text-sm transition-all duration-300 bg-rose-500 text-white shadow-lg shadow-rose-500/20 hover:bg-rose-600 hover:scale-105 active:scale-95">
                 {saving ? <Loader2 size={20} className="animate-spin" /> : <Save size={20} />}
                 {isEditing ? (rtl ? 'حفظ التعديلات' : 'Save Changes') : (rtl ? 'إضافة وطرح الصفحة' : 'Publish Page')}
               </button>
@@ -412,7 +415,7 @@ export default function PagesManager() {
                       <button disabled={idx===pages.length-1} onClick={() => movePage(idx, 'down')} className="text-slate-400 hover:text-primary-500 disabled:opacity-20 transition"><ArrowDown size={18} /></button>
                    </div>
                    <div className="w-12 h-12 rounded-xl bg-slate-50 dark:bg-white/5 flex items-center justify-center relative">
-                     {page.status === 'draft' ? <ShieldAlert size={20} className="text-amber-500" /> : <CheckCircle2 size={20} className="text-green-500" />}
+                     {page.status === 'draft' ? <ShieldAlert size={20} className="text-amber-500" /> : <CheckCircle2 size={20} className="text-primary-500" />}
                    </div>
                    <div>
                      <h3 className="font-bold text-lg text-slate-800 dark:text-white flex items-center gap-2">
@@ -479,4 +482,5 @@ interface PageItem {
   spotlight_product_id?: string;
   countdown_end_date?: string | Date;
   show_search?: boolean;
+  image_url?: string;
 }

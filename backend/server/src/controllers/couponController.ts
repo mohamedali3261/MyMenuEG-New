@@ -2,6 +2,7 @@ import { Request, Response } from 'express';
 import prisma from '../lib/prisma';
 import { couponValidationSchema, couponUpsertSchema } from '../utils/schemas';
 import { getQueryParam } from '../utils/helpers';
+import { logAudit } from '../services/auditService';
 
 export const getCoupons = async (req: Request, res: Response) => {
   try {
@@ -49,6 +50,10 @@ export const upsertCoupon = async (req: Request, res: Response) => {
   try {
     const input = couponUpsertSchema.parse(req.body);
     const cpnId = input.id || `CPN-${Date.now()}`;
+    const existedBefore = Boolean(input.id && await prisma.coupons.findUnique({
+      where: { id: String(input.id) },
+      select: { id: true }
+    }));
 
     await prisma.coupons.upsert({
       where: { id: cpnId },
@@ -71,6 +76,12 @@ export const upsertCoupon = async (req: Request, res: Response) => {
       }
     });
 
+    await logAudit(
+      existedBefore ? 'update_coupon' : 'create_coupon',
+      (req as any).user?.username || 'system',
+      `${existedBefore ? 'Updated' : 'Created'} coupon: ${cpnId} (${input.code})`
+    );
+
     res.json({ success: true });
   } catch (err: any) {
     if (err.name === 'ZodError') {
@@ -88,6 +99,7 @@ export const deleteCoupon = async (req: Request, res: Response) => {
   try {
     const { id } = req.params;
     await prisma.coupons.delete({ where: { id: String(id) } });
+    await logAudit('delete_coupon', (req as any).user?.username || 'system', `Deleted coupon: ${String(id)}`);
     res.json({ success: true });
   } catch (err) {
     console.error(err);

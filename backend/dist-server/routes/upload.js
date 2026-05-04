@@ -5,16 +5,35 @@ import fs from 'fs';
 import sharp from 'sharp';
 import { fileURLToPath } from 'url';
 import { authenticateToken } from '../middleware/auth';
+import { hasAnyPermission } from '../middleware/permissions';
 import { optimizeImageBuffer } from '../services/imageService';
 import prisma from '../lib/prisma';
 import { toFolderName } from '../controllers/categoryController';
+import { rateLimit } from 'express-rate-limit';
+import { logger } from '../utils/logger';
+import { logAudit } from '../services/auditService';
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
 const router = Router();
+// Rate limiter for uploads
+const uploadLimiter = rateLimit({
+    windowMs: 15 * 60 * 1000, // 15 minutes
+    max: 20, // 20 uploads per 15 min per IP
+    message: { error: 'Too many uploads. Please try again later.' },
+    standardHeaders: true,
+    legacyHeaders: false,
+});
+const contactUploadLimiter = rateLimit({
+    windowMs: 60 * 60 * 1000, // 1 hour
+    max: 8, // stricter: 8 files per hour per IP
+    message: { error: 'Too many contact uploads. Please try again later.' },
+    standardHeaders: true,
+    legacyHeaders: false,
+});
 // Allowed upload folders (whitelist for security)
 // All product images go to 'products' folder regardless of category
 const ALLOWED_FOLDERS = [
-    'products', 'banners', 'branding', 'categories', 'popup_offer', 'general', 'slides'
+    'products', 'banners', 'branding', 'categories', 'popup_offer', 'general', 'slides', 'preloader', 'contact_logos', 'marquee'
 ];
 // Map upload types to actual folders
 const FOLDER_MAP = {
@@ -29,6 +48,10 @@ const FOLDER_MAP = {
     'general': 'general',
     'slides': 'slides',
     'slide': 'slides', // Alias
+    'preloader': 'preloader',
+    'contact_logos': 'contact_logos',
+    'contact': 'contact_logos', // Alias
+    'marquee': 'marquee',
 };
 // Multer storage configuration
 const storage = multer.memoryStorage();
@@ -56,7 +79,73 @@ const upload = multer({
     }
 });
 const uploadSingle = upload.single('image');
-router.post('/', authenticateToken, (req, res) => {
+const IMAGE_EXTS = ['.jpg', '.jpeg', '.png', '.gif', '.webp'];
+const CONTACT_EXTS = [...IMAGE_EXTS, '.pdf', '.ai', '.psd'];
+const inferFileTypeFromMagicBytes = async (buffer) => {
+    // Common signatures:
+    // JPEG: FF D8 FF
+    // PNG: 89 50 4E 47 0D 0A 1A 0A
+    // GIF: 47 49 46 38
+    // WEBP: RIFF....WEBP
+    // PDF/AI (pdf-based): %PDF-
+    // AI (postscript-based): %!PS-Adobe
+    // PSD: 38 42 50 53 -> "8BPS"
+    if (buffer.length >= 3 && buffer[0] === 0xff && buffer[1] === 0xd8 && buffer[2] === 0xff)
+        return 'jpeg';
+    if (buffer.length >= 8 &&
+        buffer[0] === 0x89 &&
+        buffer[1] === 0x50 &&
+        buffer[2] === 0x4e &&
+        buffer[3] === 0x47 &&
+        buffer[4] === 0x0d &&
+        buffer[5] === 0x0a &&
+        buffer[6] === 0x1a &&
+        buffer[7] === 0x0a)
+        return 'png';
+    if (buffer.length >= 4 && buffer.toString('ascii', 0, 4) === 'GIF8')
+        return 'gif';
+    if (buffer.length >= 12 &&
+        buffer.toString('ascii', 0, 4) === 'RIFF' &&
+        buffer.toString('ascii', 8, 12) === 'WEBP')
+        return 'webp';
+    if (buffer.length >= 5 && buffer.toString('ascii', 0, 5) === '%PDF-')
+        return 'pdf';
+    if (buffer.length >= 10 && buffer.toString('ascii', 0, 10) === '%!PS-Adobe')
+        return 'ai';
+    if (buffer.length >= 4 && buffer.toString('ascii', 0, 4) === '8BPS')
+        return 'psd';
+    // Fallback for image formats that may still be valid but not covered by simple signatures.
+    try {
+        const meta = await sharp(buffer).metadata();
+        if (meta.format === 'jpeg')
+            return 'jpeg';
+        if (meta.format === 'png')
+            return 'png';
+        if (meta.format === 'gif')
+            return 'gif';
+        if (meta.format === 'webp')
+            return 'webp';
+    }
+    catch {
+        // Ignore: non-image or corrupted image
+    }
+    return null;
+};
+const isAllowedExtensionForType = (ext, detectedType) => {
+    if (['jpeg', 'png', 'gif', 'webp'].includes(detectedType)) {
+        if (detectedType === 'jpeg')
+            return ['.jpg', '.jpeg'].includes(ext);
+        return ext === `.${detectedType}`;
+    }
+    if (detectedType === 'pdf')
+        return ext === '.pdf' || ext === '.ai';
+    if (detectedType === 'ai')
+        return ext === '.ai';
+    if (detectedType === 'psd')
+        return ext === '.psd';
+    return false;
+};
+router.post('/', authenticateToken, uploadLimiter, (req, res) => {
     uploadSingle(req, res, async (uploadErr) => {
         if (uploadErr) {
             if (uploadErr instanceof multer.MulterError) {
@@ -112,18 +201,27 @@ router.post('/', authenticateToken, (req, res) => {
             // --- Determine target directory ---
             let targetSubPath = pageFolder; // e.g. 'products'
             const categoryId = String(req.body.categoryId || '').trim();
-            if (pageFolder === 'products' && categoryId) {
-                // Look up category name to build subfolder
-                const category = await prisma.categories.findUnique({
-                    where: { id: categoryId },
-                    select: { name_en: true, name_ar: true }
-                });
-                if (category) {
-                    const catFolder = toFolderName(category.name_en || category.name_ar || categoryId);
-                    targetSubPath = `products/${catFolder}`;
+            if (pageFolder === 'products') {
+                let catPath = 'general';
+                if (categoryId) {
+                    const category = await prisma.categories.findUnique({
+                        where: { id: categoryId },
+                        select: { name_en: true, name_ar: true }
+                    });
+                    if (category) {
+                        catPath = toFolderName(category.name_en || category.name_ar || categoryId);
+                    }
+                }
+                if (rawProductName) {
+                    const prodFolder = toFolderName(rawProductName);
+                    targetSubPath = `products/${catPath}/${prodFolder}`;
+                }
+                else {
+                    targetSubPath = `products/${catPath}`;
                 }
             }
-            const targetDir = path.join(__dirname, '../../../../frontend/public/uploads/', targetSubPath);
+            const uploadsRoot = path.join(__dirname, '../../../../uploads');
+            const targetDir = path.join(uploadsRoot, targetSubPath);
             await fs.promises.mkdir(targetDir, { recursive: true });
             const finalDestination = path.join(targetDir, finalFilename);
             // Write the buffer directly to disk
@@ -140,19 +238,78 @@ router.post('/', authenticateToken, (req, res) => {
         }
     });
 });
+// --- Public upload endpoint for contact form (no auth required) ---
+const contactUpload = multer({
+    storage: multer.memoryStorage(),
+    fileFilter: (req, file, cb) => {
+        const ext = path.extname(file.originalname).toLowerCase();
+        if (CONTACT_EXTS.includes(ext)) {
+            cb(null, true);
+        }
+        else {
+            logger.warn(`Blocked contact upload by extension: ${ext} from IP=${req.ip}`);
+            cb(new Error('Only image, PDF, AI, PSD files are allowed'));
+        }
+    },
+    limits: { fileSize: 8 * 1024 * 1024, files: 1 }
+});
+router.post('/contact', contactUploadLimiter, contactUpload.single('file'), async (req, res) => {
+    try {
+        if (!req.file) {
+            return res.status(400).json({ error: 'No file provided' });
+        }
+        const ext = path.extname(req.file.originalname).toLowerCase();
+        if (!CONTACT_EXTS.includes(ext)) {
+            logger.warn(`Rejected contact upload due to unsupported extension: ${ext} IP=${req.ip}`);
+            return res.status(400).json({ error: 'Unsupported file extension' });
+        }
+        const detectedType = await inferFileTypeFromMagicBytes(req.file.buffer);
+        if (!detectedType || !isAllowedExtensionForType(ext, detectedType)) {
+            logger.warn(`Rejected contact upload due to magic-byte mismatch. ext=${ext} detected=${detectedType || 'unknown'} IP=${req.ip}`);
+            return res.status(400).json({ error: 'Invalid or spoofed file content' });
+        }
+        const safeName = `logo_${Date.now()}_${Math.floor(Math.random() * 1000)}`;
+        const finalFilename = `${safeName}${ext}`;
+        const uploadsRoot = path.join(__dirname, '../../../../uploads');
+        const targetDir = path.join(uploadsRoot, 'contact_logos');
+        await fs.promises.mkdir(targetDir, { recursive: true });
+        const finalDestination = path.join(targetDir, finalFilename);
+        // For images, optimize; for other files, save directly
+        const isImage = IMAGE_EXTS.includes(ext);
+        if (isImage) {
+            const optimizedBuffer = await optimizeImageBuffer(req.file.buffer);
+            await fs.promises.writeFile(finalDestination, optimizedBuffer);
+        }
+        else {
+            await fs.promises.writeFile(finalDestination, req.file.buffer);
+        }
+        const url = `/uploads/contact_logos/${finalFilename}`;
+        logger.info(`Contact file uploaded: ${finalFilename} ext=${ext} ip=${req.ip}`);
+        res.json({ success: true, fileUrl: url });
+    }
+    catch (err) {
+        if (err instanceof multer.MulterError && err.code === 'LIMIT_FILE_SIZE') {
+            logger.warn(`Rejected contact upload due to size limit from IP=${req.ip}`);
+            return res.status(400).json({ error: 'File is too large. Max size is 8MB.' });
+        }
+        logger.error('Contact upload error', err);
+        res.status(500).json({ error: 'Upload failed' });
+    }
+});
 import { removeFile } from '../utils/fileUtils';
 /**
  * DELETE /api/v1/upload
  * Body: { url: "/uploads/products/cups/large-paper-cup_123.webp" }
  * Deletes a single image file from disk.
  */
-router.delete('/', authenticateToken, async (req, res) => {
+router.delete('/', authenticateToken, hasAnyPermission('products:write', 'pages:write', 'slides:write', 'settings:write'), async (req, res) => {
     try {
         const { url } = req.body;
         if (!url || typeof url !== 'string' || !url.startsWith('/uploads/')) {
             return res.status(400).json({ error: 'Invalid file URL' });
         }
         removeFile(url);
+        await logAudit('delete_uploaded_file', req.user?.username || 'system', `Deleted uploaded file: ${url}`);
         res.json({ success: true });
     }
     catch (err) {

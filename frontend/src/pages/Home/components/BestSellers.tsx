@@ -30,7 +30,7 @@ export default function BestSellers() {
           description_en: string;
           price: number;
           is_best_seller?: number;
-        }>).filter((p) => p.is_best_seller === 1);
+        }>).filter((p: any) => p.is_best_seller === 1 && !(p.bundle_items && p.bundle_items.length > 0));
         setProducts(bestSellers);
       })
       .catch(console.error)

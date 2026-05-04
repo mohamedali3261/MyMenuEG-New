@@ -307,34 +307,49 @@ export function useProductFormState() {
     if (!formData.name_ar || !formData.name_en) {
       return showToast(rtl ? 'برجاء إدخال اسم المنتج' : 'Please enters product name', 'error');
     }
+    if ((!formData.price || formData.price <= 0) && productType !== 'variants' && productType !== 'bundle') {
+      return showToast(rtl ? 'برجاء إدخال سعر صحيح للمنتج' : 'Please enter a valid product price', 'error');
+    }
     setLoading(true);
     try {
       const finalPrice = productType === 'variants' && variants.length > 0 ? (variants[0].price || 1) : formData.price;
       const finalOldPrice = productType === 'variants' && variants.length > 0 ? (variants[0].old_price || 0) : formData.old_price;
       const finalStock = productType === 'variants' ? variants.reduce((sum, v) => sum + (Number(v.stock) || 0), 0) : formData.stock;
 
-      await api.post('/products', {
-        id, 
+      // Clean empty rows before sending
+      const cleanSpecs = (specs || []).filter(s => s.key_ar || s.key_en || s.val_ar || s.val_en);
+      const cleanQuantityPrices = (quantityPrices || []).filter(qp => qp.quantity_label && qp.price > 0);
+      const cleanDetailItems = (detailItems || []).filter(d => d.label_ar || d.label_en || d.value_ar || d.value_en);
+      const cleanFaqs = (faqs || []).filter(f => f.question_ar || f.question_en || f.answer_ar || f.answer_en);
+      const cleanVariants = (variants || []).filter(v => v.price > 0).map(v => ({ ...v, images: v.images || [] }));
+
+      const payload = {
+        id,
         ...formData,
         price: finalPrice,
         old_price: finalOldPrice,
         stock: finalStock,
         image_url: images.length > 0 ? images[0] : undefined,
-        specs: specs || [],
+        specs: cleanSpecs,
         images: images || [],
-        quantity_prices: quantityPrices || [],
-        detail_items: detailItems || [],
-        faqs: faqs || [],
+        quantity_prices: cleanQuantityPrices,
+        detail_items: cleanDetailItems,
+        faqs: cleanFaqs,
         fbt_ids: fbtIds || [],
         template_key: templateKey || '',
-        variants: (variants || []).map(v => ({ ...v, images: v.images || [] })),
+        variants: cleanVariants,
         allow_custom_print: productType === 'custom' || formData.allow_custom_print,
         bundle_items: bundleItems || []
-      });
+      };
+
+      await api.post('/products', payload);
       showToast(rtl ? 'تم حفظ المنتج بنجاح!' : 'Product saved successfully!', 'success');
       navigate('/admin/products');
     } catch (error: any) {
-      showToast(error.response?.data?.error || (rtl ? 'فشل حفظ المنتج' : 'Save failed'), 'error');
+      const serverError = error.response?.data?.error || '';
+      const serverDetails = error.response?.data?.details;
+      const detailMsg = Array.isArray(serverDetails) ? serverDetails.join(' | ') : '';
+      showToast(`${serverError}${detailMsg ? ': ' + detailMsg : ''}` || (rtl ? 'فشل حفظ المنتج' : 'Save failed'), 'error');
     } finally {
       setLoading(false);
     }

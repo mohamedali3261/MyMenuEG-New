@@ -19,6 +19,7 @@ interface ManagedAdmin {
   id: string;
   username: string;
   is_super_admin: boolean;
+  is_active?: boolean;
   permissions?: string[];
 }
 
@@ -117,9 +118,11 @@ export default function UserManagement() {
         
         <button 
           onClick={handleOpenAdd}
-          className="flex items-center justify-center gap-2 bg-primary-500 hover:bg-primary-600 text-white px-6 py-3 rounded-2xl font-bold transition-all shadow-lg shadow-primary-500/20 active:scale-95"
+          className="group flex items-center gap-3 px-5 py-2.5 rounded-2xl font-black text-sm transition-all duration-300 bg-primary-500 text-white shadow-lg shadow-primary-500/25 hover:bg-primary-600 hover:shadow-xl hover:shadow-primary-500/30 hover:-translate-y-0.5 active:translate-y-0 dark:bg-primary-600 dark:hover:bg-primary-500"
         >
-          <LucidePlus size={20} />
+          <span className="w-7 h-7 rounded-lg bg-white/30 flex items-center justify-center group-hover:rotate-90 transition-transform duration-300">
+            <LucidePlus size={16} strokeWidth={3} />
+          </span>
           <span>إضافة مستخدم جديد</span>
         </button>
       </div>
@@ -143,6 +146,9 @@ export default function UserManagement() {
                   <h3 className="text-lg font-bold text-white group-hover:text-primary-400 transition-colors">{admin.username}</h3>
                   <span className="text-xs text-slate-500 block mt-0.5">
                     {admin.is_super_admin ? 'مسؤول رئيسي' : 'مسؤول'}
+                    {!admin.is_active && (
+                      <span className="mr-1.5 px-1.5 py-0.5 rounded bg-red-500/20 text-red-400 text-[10px] font-bold">غير مفعل</span>
+                    )}
                   </span>
                 </div>
               </div>
@@ -157,17 +163,35 @@ export default function UserManagement() {
                 </button>
                 
                 {!admin.is_super_admin && (
-                  <button 
-                    onClick={() => {
-                      if (window.confirm('هل أنت متأكد من حذف هذا المستخدم؟')) {
-                        deleteAdmin(admin.id).then(() => fetchAdmins());
-                      }
-                    }}
-                    className="p-2 text-slate-500 hover:text-red-500 hover:bg-red-500/10 rounded-xl transition-all"
-                    title="حذف"
-                  >
-                    <LucideTrash2 size={18} />
-                  </button>
+                  <>
+                    <button
+                      onClick={async () => {
+                        const newStatus = !admin.is_active;
+                        const result = await updateAdmin(admin.id, { is_active: newStatus });
+                        if (result.success) {
+                          toast.success(newStatus ? 'تم تفعيل المستخدم' : 'تم تعطيل المستخدم');
+                          fetchAdmins();
+                        } else {
+                          toast.error(result.error || 'فشل في تحديث الحالة');
+                        }
+                      }}
+                      className={`p-2 rounded-xl transition-all ${admin.is_active ? 'text-emerald-500 hover:bg-emerald-500/10' : 'text-red-500 hover:bg-red-500/10'}`}
+                      title={admin.is_active ? 'تعطيل' : 'تفعيل'}
+                    >
+                      {admin.is_active ? <LucideCheck size={18} /> : <LucideX size={18} />}
+                    </button>
+                    <button
+                      onClick={() => {
+                        if (window.confirm('هل أنت متأكد من حذف هذا المستخدم؟')) {
+                          deleteAdmin(admin.id).then(() => fetchAdmins());
+                        }
+                      }}
+                      className="p-2 text-slate-500 hover:text-red-500 hover:bg-red-500/10 rounded-xl transition-all"
+                      title="حذف"
+                    >
+                      <LucideTrash2 size={18} />
+                    </button>
+                  </>
                 )}
               </div>
             </div>
@@ -193,29 +217,29 @@ export default function UserManagement() {
       {/* Add/Edit User Modal */}
       <AnimatePresence>
         {isModalOpen && (
-          <div className="fixed inset-0 z-[100] flex items-start justify-center pt-28 md:pt-32 pb-6 px-4 overflow-y-auto">
-            <motion.div 
+          <div className="fixed inset-0 z-[100] flex items-start justify-center pt-20 pb-6 px-4 overflow-y-auto">
+            <motion.div
               initial={{ opacity: 0 }}
               animate={{ opacity: 1 }}
               exit={{ opacity: 0 }}
               onClick={() => setIsModalOpen(false)}
-              className="absolute inset-0 bg-black/80 backdrop-blur-md"
+              className="fixed inset-0 bg-black/80 backdrop-blur-md"
             />
             
             <motion.div 
               initial={{ opacity: 0, scale: 0.95, y: 20 }}
               animate={{ opacity: 1, scale: 1, y: 0 }}
               exit={{ opacity: 0, scale: 0.95, y: 20 }}
-              className="w-full max-w-xl glass-card border border-white/10 rounded-2xl p-3.5 md:p-4 shadow-2xl relative z-110 overflow-hidden"
+              className="w-full max-w-3xl bg-white dark:bg-slate-900 border border-slate-200 dark:border-white/10 rounded-2xl p-6 md:p-8 shadow-2xl relative z-110 overflow-hidden"
             >
               <div className="max-h-[calc(100vh-11.5rem)] overflow-y-auto custom-scrollbar pr-1.5 [direction:ltr]">
               <div dir="rtl" className="text-sm">
               <div className="flex items-center justify-between mb-4">
-                <h2 className="text-lg font-black text-white flex items-center gap-2">
+                <h2 className="text-xl font-black text-slate-800 dark:text-white flex items-center gap-2">
                   {isEditMode ? <LucidePencil className="text-primary-500" size={20} /> : <LucideUserCheck className="text-primary-500" size={20} />}
                   <span>{isEditMode ? `تعديل المستخدم: ${username}` : 'إضافة مسؤول جديد'}</span>
                 </h2>
-                <button onClick={() => setIsModalOpen(false)} className="p-1.5 text-slate-400 hover:text-white hover:bg-white/5 rounded-xl transition-all">
+                <button onClick={() => setIsModalOpen(false)} className="p-2 text-slate-400 hover:text-slate-600 dark:hover:text-white hover:bg-slate-100 dark:hover:bg-white/5 rounded-xl transition-all">
                   <LucideX size={18} />
                 </button>
               </div>
@@ -223,23 +247,23 @@ export default function UserManagement() {
               <form onSubmit={handleSaveUser} className="space-y-4">
                 <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
                   <div className="space-y-2">
-                    <label className="text-xs font-bold text-slate-400 mr-1 block">اسم المستخدم</label>
+                    <label className="text-sm font-bold text-slate-600 dark:text-slate-400 mr-1 block">اسم المستخدم</label>
                     <input 
                       type="text" 
                       value={username}
                       onChange={(e) => setUsername(e.target.value)}
-                      className="w-full h-9 bg-white/5 border border-white/10 rounded-lg px-3 text-xs text-white outline-none focus:border-primary-500/50 transition-all"
+                      className="w-full h-11 bg-slate-50 dark:bg-white/5 border border-slate-200 dark:border-white/10 rounded-xl px-4 text-sm text-slate-800 dark:text-white outline-none focus:border-primary-500 focus:ring-2 focus:ring-primary-500/20 transition-all"
                       placeholder="admin_new"
                       required
                     />
                   </div>
                   <div className="space-y-2">
-                    <label className="text-xs font-bold text-slate-400 mr-1 block">كلمة المرور {isEditMode && '(اتركها فارغة لعدم التغيير)'}</label>
+                    <label className="text-sm font-bold text-slate-600 dark:text-slate-400 mr-1 block">كلمة المرور {isEditMode && '(اتركها فارغة لعدم التغيير)'}</label>
                     <input 
                       type="password" 
                       value={password}
                       onChange={(e) => setPassword(e.target.value)}
-                      className="w-full h-9 bg-white/5 border border-white/10 rounded-lg px-3 text-xs text-white outline-none focus:border-primary-500/50 transition-all"
+                      className="w-full h-11 bg-slate-50 dark:bg-white/5 border border-slate-200 dark:border-white/10 rounded-xl px-4 text-sm text-slate-800 dark:text-white outline-none focus:border-primary-500 focus:ring-2 focus:ring-primary-500/20 transition-all"
                       placeholder="••••"
                       required={!isEditMode}
                     />
@@ -247,24 +271,24 @@ export default function UserManagement() {
                 </div>
 
                 <div className="space-y-2.5">
-                  <label className="text-xs font-bold text-slate-400 mr-1 block uppercase tracking-widest">تحديد صلاحيات الوصول إلى الصفحات:</label>
-                  <div className="grid grid-cols-2 lg:grid-cols-3 gap-2">
+                  <label className="text-sm font-bold text-slate-600 dark:text-slate-400 mr-1 block uppercase tracking-widest">تحديد صلاحيات الوصول إلى الصفحات:</label>
+                  <div className="grid grid-cols-2 lg:grid-cols-4 gap-3">
                     {AVAILABLE_PAGES.map((page) => (
                       <button
                         key={page.id}
                         type="button"
                         onClick={() => togglePermission(page.id)}
-                        className={`p-2.5 rounded-lg border transition-all text-right flex items-center justify-between group ${
+                        className={`p-3 rounded-xl border transition-all text-right flex items-center justify-between group ${
                           selectedPermissions.includes(page.id) 
-                            ? 'bg-primary-500/20 border-primary-500/50 text-white' 
-                            : 'bg-white/5 border-white/5 text-slate-400 hover:border-white/20'
+                            ? 'bg-primary-500/10 dark:bg-primary-500/20 border-primary-500 text-primary-700 dark:text-white shadow-sm' 
+                            : 'bg-slate-50 dark:bg-white/5 border-slate-200 dark:border-white/10 text-slate-600 dark:text-slate-400 hover:border-primary-300 dark:hover:border-white/30'
                         }`}
                       >
-                        <span className="text-xs font-medium">{page.name}</span>
+                        <span className="text-sm font-medium">{page.name}</span>
                         {selectedPermissions.includes(page.id) ? (
                           <LucideCheck size={14} className="text-primary-500" />
                         ) : (
-                          <div className="w-3.5 h-3.5 rounded-full border-2 border-slate-600 group-hover:border-slate-400" />
+                          <div className="w-3.5 h-3.5 rounded-full border-2 border-slate-300 dark:border-slate-600 group-hover:border-primary-400 dark:group-hover:border-slate-400" />
                         )}
                       </button>
                     ))}
@@ -275,14 +299,14 @@ export default function UserManagement() {
                   <button 
                     type="button"
                     onClick={() => setIsModalOpen(false)}
-                    className="px-5 h-9 border border-white/5 hover:bg-white/5 text-slate-300 text-xs font-bold rounded-lg transition-all"
+                    className="px-6 h-11 border border-slate-200 dark:border-white/10 hover:bg-slate-50 dark:hover:bg-white/5 text-slate-600 dark:text-slate-300 text-sm font-bold rounded-xl transition-all"
                   >
                     إلغاء
                   </button>
                   <button 
                     type="submit"
                     disabled={isLoading}
-                    className="px-6 h-9 bg-primary-500 hover:bg-primary-600 text-white text-xs font-bold rounded-lg flex items-center gap-2 shadow-lg shadow-primary-500/20 transition-all disabled:opacity-50"
+                    className="px-8 h-11 bg-primary-500 hover:bg-primary-600 text-white text-sm font-bold rounded-xl flex items-center gap-2 shadow-lg shadow-primary-500/25 transition-all disabled:opacity-50"
                   >
                     {isLoading ? <div className="w-4 h-4 border-2 border-white/30 border-t-white rounded-full animate-spin" /> : (isEditMode ? 'تحديث البيانات' : 'إضافة المستخدم')}
                   </button>

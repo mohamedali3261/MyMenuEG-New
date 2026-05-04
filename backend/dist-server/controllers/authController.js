@@ -4,8 +4,11 @@ import crypto from 'crypto';
 import prisma from '../lib/prisma';
 import { logger } from '../utils/logger';
 import { validatedJwtSecret, validatedRefreshSecret } from '../middleware/auth';
+import { logAudit } from '../services/auditService';
+import { resilientRequest } from '../services/resilientHttpService';
 const ACCESS_TOKEN_TTL = (process.env.ACCESS_TOKEN_TTL || '15m');
 const REFRESH_TOKEN_TTL = (process.env.REFRESH_TOKEN_TTL || '7d');
+const CUSTOMER_ACCESS_TOKEN_TTL = (process.env.CUSTOMER_ACCESS_TOKEN_TTL || '12h');
 const isProduction = process.env.NODE_ENV === 'production';
 const REFRESH_COOKIE_NAME = 'refresh_token';
 const safeParsePermissions = (value) => {
@@ -73,6 +76,19 @@ const saveRefreshToken = async (adminId, refreshToken, req) => {
             ip_address: req.ip || req.socket.remoteAddress,
             expires_at: expiresAt,
         }
+    }).catch((err) => {
+        // If unique constraint violation, try to update existing
+        if (err.code === 'P2002') {
+            return prisma.refresh_tokens.updateMany({
+                where: { admin_id: adminId, token_hash: tokenHash },
+                data: {
+                    user_agent: req.headers['user-agent']?.substring(0, 500),
+                    ip_address: req.ip || req.socket.remoteAddress,
+                    expires_at: expiresAt,
+                }
+            });
+        }
+        throw err;
     });
 };
 const getRefreshToken = async (adminId, tokenHash) => {
@@ -103,18 +119,82 @@ export const cleanupExpiredTokens = async () => {
     });
     logger.info(`Cleaned up ${result.count} expired refresh tokens`);
 };
+export const register = async (req, res) => {
+    try {
+        const { username, password, email } = req.body;
+        // Plan 0 Hardening: Restrict registration
+        const adminCount = await prisma.admins.count();
+        const isFirstAdmin = adminCount === 0;
+        const actor = req.user;
+        if (!isFirstAdmin && (!actor || !actor.is_super_admin)) {
+            await logAudit('register_rejected', actor?.username || 'anonymous', 'Unauthorized admin registration attempt');
+            return res.status(403).json({ error: 'التسجيل متاح فقط من قبل المسؤول' });
+        }
+        if (typeof username !== 'string' || username.trim().length < 3) {
+            return res.status(400).json({ error: 'اسم المستخدم يجب أن يكون 3 أحرف على الأقل' });
+        }
+        if (typeof password !== 'string' || password.length < 8) {
+            return res.status(400).json({ error: 'كلمة المرور يجب أن تكون 8 أحرف على الأقل' });
+        }
+        if (!email || !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email)) {
+            return res.status(400).json({ error: 'البريد الإلكتروني مطلوب' });
+        }
+        const existsUsername = await prisma.admins.findUnique({ where: { username } });
+        if (existsUsername) {
+            return res.status(400).json({ error: 'اسم المستخدم مسجل بالفعل' });
+        }
+        const existsEmail = await prisma.admins.findFirst({ where: { email } });
+        if (existsEmail) {
+            return res.status(400).json({ error: 'البريد الإلكتروني مسجل بالفعل' });
+        }
+        const hashedPassword = await bcrypt.hash(password, 12);
+        const newId = `adm-${Date.now()}`;
+        await prisma.admins.create({
+            data: {
+                id: newId,
+                username: username.trim(),
+                password: hashedPassword,
+                email,
+                permissions: JSON.stringify(['orders', 'products', 'categories', 'customers', 'coupons', 'pages', 'slides']),
+                is_super_admin: false,
+                is_active: true
+            }
+        });
+        logger.info(`New admin registered: ${username}`);
+        res.json({ success: true, message: 'تم إنشاء الحساب بنجاح!' });
+    }
+    catch (err) {
+        logger.error('Registration error:', err);
+        res.status(500).json({ error: 'فشل في التسجيل' });
+    }
+};
 export const login = async (req, res) => {
     try {
         const { username, password } = req.body;
-        const admin = await prisma.admins.findUnique({
-            where: { username }
-        });
+        // Support login with either username or email
+        const isEmail = username && username.includes('@');
+        let admin;
+        try {
+            admin = isEmail
+                ? await prisma.admins.findFirst({ where: { email: username } })
+                : await prisma.admins.findUnique({ where: { username } });
+        }
+        catch (err) {
+            // Fix invalid last_login values
+            await prisma.admins.updateMany({
+                where: { last_login: { lt: new Date('1900-01-01') } },
+                data: { last_login: null }
+            });
+            admin = isEmail
+                ? await prisma.admins.findFirst({ where: { email: username } })
+                : await prisma.admins.findUnique({ where: { username } });
+        }
         if (!admin || !(await bcrypt.compare(password, admin.password))) {
-            logger.warn(`Failed login attempt for username: ${username}`);
-            return res.status(401).json({ error: 'Invalid username or password' });
+            logger.warn(`Failed login attempt for: ${username}`);
+            return res.status(401).json({ error: 'خطأ في اسم المستخدم أو كلمة المرور' });
         }
         if (!admin.is_active) {
-            return res.status(401).json({ error: 'Account is disabled' });
+            return res.status(401).json({ error: 'الحساب معطل' });
         }
         const payload = buildPayload(admin);
         const token = signAccessToken(payload);
@@ -257,6 +337,7 @@ export const getAllAdmins = async (req, res) => {
 export const createAdmin = async (req, res) => {
     try {
         if (!req.user.is_super_admin) {
+            await logAudit('create_admin_rejected', req.user?.username || 'system', 'Unauthorized create admin attempt');
             return res.status(403).json({ error: 'Unauthorized' });
         }
         const { username, password, permissions, email } = req.body;
@@ -286,6 +367,7 @@ export const createAdmin = async (req, res) => {
                 is_super_admin: false
             }
         });
+        await logAudit('create_admin', req.user?.username || 'system', `Created admin: ${username.trim()} (${newId})`);
         logger.info(`Admin created: ${username} by ${req.user.username}`);
         res.json({ success: true, id: newId });
     }
@@ -312,6 +394,7 @@ export const updateAdmin = async (req, res) => {
             return res.status(400).json({ error: 'Permissions must be an array' });
         }
         if (!req.user.is_super_admin && req.user.id !== id) {
+            await logAudit('update_admin_rejected', req.user?.username || 'system', `Unauthorized update attempt for admin ${id}`);
             return res.status(403).json({ error: 'Unauthorized' });
         }
         // Check if new username is already taken by another user
@@ -342,6 +425,7 @@ export const updateAdmin = async (req, res) => {
             where: { id },
             data
         });
+        await logAudit('update_admin', req.user?.username || 'system', `Updated admin: ${id}`);
         logger.info(`Admin updated: ${id} by ${req.user.username}`);
         res.json({ success: true });
     }
@@ -354,6 +438,7 @@ export const deleteAdmin = async (req, res) => {
     try {
         const { id } = req.params;
         if (!req.user.is_super_admin) {
+            await logAudit('delete_admin_rejected', req.user?.username || 'system', `Unauthorized delete attempt for admin ${id}`);
             return res.status(403).json({ error: 'Unauthorized' });
         }
         if (id === 'admin-1') {
@@ -365,11 +450,283 @@ export const deleteAdmin = async (req, res) => {
         // Delete refresh tokens first
         await prisma.refresh_tokens.deleteMany({ where: { admin_id: id } });
         await prisma.admins.delete({ where: { id } });
+        await logAudit('delete_admin', req.user?.username || 'system', `Deleted admin: ${id}`);
         logger.info(`Admin deleted: ${id} by ${req.user.username}`);
         res.json({ success: true });
     }
     catch (err) {
         logger.error('Failed to delete admin:', err);
         res.status(500).json({ error: 'Failed to delete admin' });
+    }
+};
+// --- Google OAuth Login (using tokeninfo endpoint, no library needed) ---
+export const googleLogin = async (req, res) => {
+    try {
+        const { credential } = req.body;
+        if (!credential || typeof credential !== 'string') {
+            return res.status(400).json({ error: 'Google credential is required' });
+        }
+        // Verify token with Google's public endpoint
+        const tokenInfoRes = await resilientRequest({
+            service: 'google-oauth',
+            method: 'GET',
+            url: `https://oauth2.googleapis.com/tokeninfo?id_token=${encodeURIComponent(credential)}`,
+        });
+        if (tokenInfoRes.status < 200 || tokenInfoRes.status >= 300) {
+            logger.warn('Invalid Google token');
+            return res.status(401).json({ error: 'Invalid Google token' });
+        }
+        const tokenInfo = tokenInfoRes.data;
+        if (tokenInfo.email_verified !== 'true' && tokenInfo.email_verified !== true) {
+            return res.status(401).json({ error: 'Google email not verified' });
+        }
+        const email = tokenInfo.email;
+        if (!email) {
+            return res.status(401).json({ error: 'No email in Google token' });
+        }
+        // Find admin by email (only existing admins can log in via Google)
+        const admin = await prisma.admins.findFirst({ where: { email } });
+        if (!admin) {
+            logger.warn(`Google login attempt for unknown email: ${email}`);
+            return res.status(401).json({ error: 'No admin account found for this email. Please contact the administrator.' });
+        }
+        if (!admin.is_active) {
+            return res.status(401).json({ error: 'Account is disabled' });
+        }
+        const payload = buildPayload(admin);
+        const token = signAccessToken(payload);
+        const refreshToken = signRefreshToken({ id: admin.id, username: admin.username });
+        await saveRefreshToken(admin.id, refreshToken, req);
+        setRefreshCookie(res, refreshToken);
+        // Update last login
+        await prisma.admins.update({
+            where: { id: admin.id },
+            data: { last_login: new Date() }
+        });
+        logger.info(`Admin logged in via Google: ${admin.username} (${email})`);
+        res.json({
+            success: true,
+            token,
+            user: payload
+        });
+    }
+    catch (err) {
+        logger.error('Google login error:', err);
+        res.status(500).json({ error: 'Google login failed' });
+    }
+};
+// --- Customer Email/Password Register ---
+export const customerRegister = async (req, res) => {
+    try {
+        const { name, email, password } = req.body;
+        if (!email || !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email)) {
+            return res.status(400).json({ error: 'البريد الإلكتروني مطلوب' });
+        }
+        if (typeof password !== 'string' || password.length < 8) {
+            return res.status(400).json({ error: 'كلمة المرور يجب أن تكون 8 أحرف على الأقل' });
+        }
+        if (!name || typeof name !== 'string' || name.trim().length < 2) {
+            return res.status(400).json({ error: 'الاسم مطلوب' });
+        }
+        const existsEmail = await prisma.customers.findUnique({ where: { email } });
+        if (existsEmail) {
+            return res.status(400).json({ error: 'البريد الإلكتروني مسجل بالفعل' });
+        }
+        const hashedPassword = await bcrypt.hash(password, 12);
+        const customer = await prisma.customers.create({
+            data: {
+                email,
+                password: hashedPassword,
+                name: name.trim(),
+            }
+        });
+        const token = jwt.sign({ id: customer.id, email: customer.email, type: 'customer' }, validatedJwtSecret, { expiresIn: CUSTOMER_ACCESS_TOKEN_TTL });
+        logger.info(`Customer registered: ${email}`);
+        res.json({
+            success: true,
+            message: 'تم إنشاء الحساب بنجاح!',
+            token,
+            customer: {
+                id: customer.id,
+                email: customer.email,
+                name: customer.name,
+                phone: customer.phone,
+                governorate: customer.governorate,
+                city: customer.city,
+                address: customer.address,
+                avatar: customer.avatar
+            }
+        });
+    }
+    catch (err) {
+        logger.error('Customer registration error:', err);
+        res.status(500).json({ error: 'فشل في التسجيل' });
+    }
+};
+// --- Customer Email/Password Login ---
+export const customerLogin = async (req, res) => {
+    try {
+        const { email, password } = req.body;
+        if (!email || !password) {
+            return res.status(400).json({ error: 'البريد الإلكتروني وكلمة المرور مطلوبان' });
+        }
+        const customer = await prisma.customers.findUnique({ where: { email } });
+        if (!customer || !customer.password) {
+            return res.status(401).json({ error: 'خطأ في البريد الإلكتروني أو كلمة المرور' });
+        }
+        if (customer.is_active === false) {
+            return res.status(403).json({ error: 'هذا الحساب معطل. يرجى التواصل مع الإدارة' });
+        }
+        if (!(await bcrypt.compare(password, customer.password))) {
+            return res.status(401).json({ error: 'خطأ في البريد الإلكتروني أو كلمة المرور' });
+        }
+        const token = jwt.sign({ id: customer.id, email: customer.email, type: 'customer' }, validatedJwtSecret, { expiresIn: CUSTOMER_ACCESS_TOKEN_TTL });
+        logger.info(`Customer logged in: ${email}`);
+        res.json({
+            success: true,
+            token,
+            customer: {
+                id: customer.id,
+                email: customer.email,
+                name: customer.name,
+                phone: customer.phone,
+                governorate: customer.governorate,
+                city: customer.city,
+                address: customer.address,
+                avatar: customer.avatar
+            }
+        });
+    }
+    catch (err) {
+        logger.error('Customer login error:', err);
+        res.status(500).json({ error: 'فشل تسجيل الدخول' });
+    }
+};
+// --- Customer Token Refresh ---
+export const customerRefresh = async (req, res) => {
+    try {
+        const authHeader = req.headers['authorization'];
+        const token = (Array.isArray(authHeader) ? authHeader[0] : authHeader)?.split(' ')[1];
+        if (!token) {
+            return res.status(401).json({ error: 'Token required' });
+        }
+        // Verify token (must still be valid)
+        let decoded;
+        try {
+            decoded = jwt.verify(token, validatedJwtSecret);
+        }
+        catch {
+            return res.status(401).json({ error: 'Invalid or expired token' });
+        }
+        if (!decoded || decoded.type !== 'customer') {
+            return res.status(401).json({ error: 'Not a customer token' });
+        }
+        const customer = await prisma.customers.findUnique({
+            where: { id: decoded.id },
+            select: { id: true, email: true, name: true, phone: true, governorate: true, city: true, address: true, avatar: true, is_active: true }
+        });
+        if (!customer) {
+            return res.status(401).json({ error: 'Customer not found' });
+        }
+        if (customer.is_active === false) {
+            return res.status(403).json({ error: 'هذا الحساب معطل. يرجى التواصل مع الإدارة' });
+        }
+        const newToken = jwt.sign({ id: customer.id, email: customer.email, type: 'customer' }, validatedJwtSecret, { expiresIn: CUSTOMER_ACCESS_TOKEN_TTL });
+        return res.json({
+            success: true,
+            token: newToken,
+            customer: {
+                id: customer.id,
+                email: customer.email,
+                name: customer.name,
+                phone: customer.phone,
+                governorate: customer.governorate,
+                city: customer.city,
+                address: customer.address,
+                avatar: customer.avatar
+            }
+        });
+    }
+    catch (err) {
+        logger.error('Customer refresh error:', err);
+        res.status(401).json({ error: 'Refresh failed' });
+    }
+};
+// --- Customer Google Login (no library needed) ---
+export const customerGoogleLogin = async (req, res) => {
+    try {
+        const { credential } = req.body;
+        if (!credential || typeof credential !== 'string') {
+            return res.status(400).json({ error: 'Google credential is required' });
+        }
+        const tokenInfoRes = await resilientRequest({
+            service: 'google-oauth',
+            method: 'GET',
+            url: `https://oauth2.googleapis.com/tokeninfo?id_token=${encodeURIComponent(credential)}`,
+        });
+        if (tokenInfoRes.status < 200 || tokenInfoRes.status >= 300) {
+            return res.status(401).json({ error: 'Invalid Google token' });
+        }
+        const tokenInfo = tokenInfoRes.data;
+        if (tokenInfo.email_verified !== 'true' && tokenInfo.email_verified !== true) {
+            return res.status(401).json({ error: 'Google email not verified' });
+        }
+        const email = tokenInfo.email;
+        const name = (tokenInfo.name || email.split('@')[0]);
+        const googleId = tokenInfo.sub;
+        const avatar = tokenInfo.picture;
+        if (!email) {
+            return res.status(401).json({ error: 'No email in Google token' });
+        }
+        // Check if Google login is enabled
+        const googleEnabledSetting = await prisma.settings.findUnique({ where: { key_name: 'google_login_enabled' } });
+        if (!googleEnabledSetting || googleEnabledSetting.value !== 'true') {
+            return res.status(403).json({ error: 'Google login is disabled' });
+        }
+        // Find or create customer
+        let customer = await prisma.customers.findFirst({ where: { email } });
+        if (customer && customer.is_active === false) {
+            return res.status(403).json({ error: 'هذا الحساب معطل. يرجى التواصل مع الإدارة' });
+        }
+        if (!customer) {
+            customer = await prisma.customers.create({
+                data: {
+                    email,
+                    name,
+                    google_id: googleId,
+                    avatar
+                }
+            });
+        }
+        else {
+            // Update name/avatar if changed
+            if (customer.name !== name || customer.avatar !== avatar) {
+                customer = await prisma.customers.update({
+                    where: { id: customer.id },
+                    data: { name, avatar, google_id: googleId }
+                });
+            }
+        }
+        // Generate JWT token for customer
+        const token = jwt.sign({ id: customer.id, email: customer.email, type: 'customer' }, validatedJwtSecret, { expiresIn: CUSTOMER_ACCESS_TOKEN_TTL });
+        logger.info(`Customer logged in via Google: ${email}`);
+        res.json({
+            success: true,
+            token,
+            customer: {
+                id: customer.id,
+                email: customer.email,
+                name: customer.name,
+                phone: customer.phone,
+                governorate: customer.governorate,
+                city: customer.city,
+                address: customer.address,
+                avatar: customer.avatar
+            }
+        });
+    }
+    catch (err) {
+        logger.error('Customer Google login error:', err);
+        res.status(500).json({ error: 'Google login failed' });
     }
 };

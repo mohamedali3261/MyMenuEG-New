@@ -9,7 +9,9 @@ import {
   MessageSquare, 
   Clock, 
   ArrowRight, 
-  Type
+  Type,
+  UploadCloud,
+  CheckCircle2
 } from 'lucide-react';
 import { toast } from 'react-hot-toast';
 import { api } from '../../api';
@@ -56,6 +58,9 @@ const YouTubeIcon = ({ size = 20 }: { size?: number }) => (
 export default function Contact() {
   const { rtl, contactSettings } = useStore();
   const [loading, setLoading] = useState(false);
+  const [uploadingFile, setUploadingFile] = useState(false);
+  const [customFileUrl, setCustomFileUrl] = useState('');
+  const [customNotes, setCustomNotes] = useState('');
   const [formData, setFormData] = useState({
     name: '',
     email: '',
@@ -64,14 +69,36 @@ export default function Contact() {
     message: ''
   });
 
+  const handleFileUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (!file) return;
+    setUploadingFile(true);
+    const fd = new FormData();
+    fd.append('file', file);
+    try {
+      const res = await api.post('/upload/contact', fd, { headers: { 'Content-Type': 'multipart/form-data' } });
+      if (res.data && res.data.fileUrl) {
+        setCustomFileUrl(res.data.fileUrl);
+        toast.success(rtl ? 'تم رفع التصميم!' : 'Design Uploaded!');
+      }
+    } catch {
+      toast.error(rtl ? 'فشل الرفع' : 'Upload failed');
+    } finally {
+      setUploadingFile(false);
+    }
+  };
+
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     setLoading(true);
     
     try {
-      await api.post('/contact', formData);
+      const payload = { ...formData, custom_file_url: customFileUrl || undefined, custom_notes: customNotes || undefined };
+      await api.post('/contact', payload);
       toast.success(rtl ? 'تم ارسال رسالتك بنجاح! سنتواصل معك قريباً.' : 'Message sent successfully! We will contact you soon.');
       setFormData({ name: '', email: '', phone: '', subject: '', message: '' });
+      setCustomFileUrl('');
+      setCustomNotes('');
     } catch (err: any) {
       const errorMsg = err.response?.data?.error || (rtl ? 'حدث خطأ. حاول مرة أخرى.' : 'An error occurred. Please try again.');
       toast.error(errorMsg);
@@ -328,11 +355,34 @@ export default function Contact() {
                      {rtl ? 'رسالتك' : 'Message'}
                    </label>
                    <textarea 
-                     required rows={4}
+                     required rows={4} maxLength={500}
                      value={formData.message}
                      onChange={e => setFormData({...formData, message: e.target.value})}
                      className="w-full bg-slate-100/50 dark:bg-black/20 border border-slate-200 dark:border-white/5 focus:border-primary-500 focus:bg-white dark:focus:bg-black/40 rounded-2xl p-5 font-bold outline-none transition-all resize-none min-h-[120px]"
                    />
+                </div>
+
+                {/* Custom Design Section */}
+                <div className="bg-indigo-50 dark:bg-indigo-500/5 border border-indigo-200 dark:border-indigo-500/10 p-4 rounded-2xl flex flex-col gap-4">
+                  <div className="flex items-center justify-between">
+                    <div>
+                      <h3 className="text-sm font-black text-indigo-900 dark:text-indigo-400 capitalize">{rtl ? 'تصميم مخصص' : 'Custom Design'}</h3>
+                      <p className="text-xs text-indigo-700/60 dark:text-indigo-300/60 font-medium">{rtl ? 'قم بإرفاق لوجو أو شرح المطبوعات للطلب' : 'Attach your logo or printing instructions.'}</p>
+                    </div>
+                    <div className="relative overflow-hidden group">
+                      <input type="file" className="absolute inset-0 opacity-0 cursor-pointer z-10" accept="image/*,.pdf,.ai,.psd" onChange={handleFileUpload} disabled={uploadingFile} />
+                      <button className={`flex items-center justify-center gap-2 px-4 py-2 rounded-xl text-xs font-bold transition-all ${customFileUrl ? 'bg-emerald-500 text-white' : 'bg-indigo-500 text-white group-hover:scale-105'}`}>
+                        {uploadingFile ? <div className="w-4 h-4 border-2 border-white border-t-transparent rounded-full animate-spin" /> : customFileUrl ? <CheckCircle2 size={16} /> : <UploadCloud size={16} />}
+                        {customFileUrl ? (rtl ? 'تم الإرفاق!' : 'Uploaded!') : (rtl ? 'تصفح الملفات' : 'Browse Files')}
+                      </button>
+                    </div>
+                  </div>
+                  <textarea 
+                    placeholder={rtl ? 'ملاحظات إضافية للتصميم (اختياري)...' : 'Additional design notes (optional)...'}
+                    value={customNotes}
+                    onChange={e => setCustomNotes(e.target.value)}
+                    className="w-full h-16 bg-white dark:bg-black/20 border border-indigo-100 dark:border-indigo-500/10 rounded-xl px-3 py-2 text-xs focus:ring-2 focus:ring-indigo-500/50 focus:border-indigo-500 outline-none resize-none placeholder-indigo-300 dark:placeholder-indigo-700 transition-all font-medium"
+                  />
                 </div>
 
                 <motion.button 

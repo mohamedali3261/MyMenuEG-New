@@ -112,6 +112,52 @@ export const authenticateToken = async (req: AuthRequest, res: Response, next: N
 };
 
 /**
+ * Verify JWT token and attach user to request (Optional version)
+ */
+export const optionalAuthenticateToken = async (req: AuthRequest, res: Response, next: NextFunction) => {
+  const authHeader = req.headers['authorization'];
+  const token = (Array.isArray(authHeader) ? authHeader[0] : authHeader)?.split(' ')[1];
+
+  if (!token) {
+    return next();
+  }
+
+  try {
+    const decoded = jwt.verify(token, validatedJwtSecret) as jwt.JwtPayload;
+    
+    const admin = await prisma.admins.findUnique({
+      where: { id: decoded.id },
+      select: {
+        id: true,
+        username: true,
+        is_super_admin: true,
+        permissions: true,
+        is_active: true
+      }
+    });
+
+    if (admin && admin.is_active) {
+      let permissions: string[] = [];
+      try {
+        permissions = admin.permissions ? JSON.parse(admin.permissions) : [];
+      } catch {
+        permissions = [];
+      }
+
+      req.user = {
+        id: admin.id,
+        username: admin.username,
+        is_super_admin: admin.is_super_admin || false,
+        permissions
+      };
+    }
+  } catch (err) {
+    // Ignore invalid tokens for optional auth
+  }
+  next();
+};
+
+/**
  * Require super admin role
  */
 export const requireSuperAdmin = (req: AuthRequest, res: Response, next: NextFunction) => {
@@ -171,6 +217,111 @@ export const optionalAuth = async (req: AuthRequest, res: Response, next: NextFu
   }
 
   next();
+};
+
+export interface CustomerAuthRequest extends Request {
+  customer?: {
+    id: string;
+    email: string;
+    name: string | null;
+  };
+}
+
+/**
+ * Verify JWT token for customer (Google-authenticated)
+ */
+export const authenticateCustomer = async (req: CustomerAuthRequest, res: Response, next: NextFunction) => {
+  const authHeader = req.headers['authorization'];
+  const token = (Array.isArray(authHeader) ? authHeader[0] : authHeader)?.split(' ')[1];
+
+  if (!token) {
+    return res.status(401).json({ error: 'Access token required' });
+  }
+
+  try {
+    const decoded = jwt.verify(token, validatedJwtSecret) as jwt.JwtPayload;
+
+    const customer = await prisma.customers.findUnique({
+      where: { id: decoded.id },
+      select: { id: true, email: true, name: true, is_active: true }
+    });
+
+    if (!customer) {
+      return res.status(401).json({ error: 'Customer not found' });
+    }
+
+    if (customer.is_active === false) {
+      return res.status(403).json({ error: 'هذا الحساب معطل. يرجى التواصل مع الإدارة' });
+    }
+
+    req.customer = {
+      id: customer.id,
+      email: customer.email,
+      name: customer.name
+    };
+
+    next();
+  } catch (err) {
+    if (err instanceof jwt.TokenExpiredError) {
+      return res.status(401).json({ error: 'Token expired' });
+    }
+    if (err instanceof jwt.JsonWebTokenError) {
+      return res.status(401).json({ error: 'Invalid token' });
+    }
+    logger.error('Customer authentication error:', err);
+    return res.status(401).json({ error: 'Authentication failed' });
+  }
+};
+
+/**
+ * Middleware that allows either an admin or a customer
+ */
+export const authenticateAny = async (req: Request, res: Response, next: NextFunction) => {
+  const authHeader = req.headers['authorization'];
+  const token = (Array.isArray(authHeader) ? authHeader[0] : authHeader)?.split(' ')[1];
+
+  if (!token) {
+    return res.status(401).json({ error: 'Authentication required' });
+  }
+
+  try {
+    const decoded = jwt.verify(token, validatedJwtSecret) as jwt.JwtPayload;
+    
+    // Check if it's an admin
+    const admin = await prisma.admins.findUnique({
+      where: { id: decoded.id },
+      select: { id: true, username: true, is_super_admin: true, permissions: true, is_active: true }
+    });
+
+    if (admin && admin.is_active) {
+      (req as any).user = {
+        id: admin.id,
+        username: admin.username,
+        is_super_admin: admin.is_super_admin || false,
+        permissions: admin.permissions ? JSON.parse(admin.permissions) : []
+      };
+      return next();
+    }
+
+    // Check if it's a customer
+    const customer = await prisma.customers.findUnique({
+      where: { id: decoded.id },
+      select: { id: true, email: true, name: true, is_active: true }
+    });
+
+    if (customer && customer.is_active !== false) {
+      (req as any).customer = {
+        id: customer.id,
+        email: customer.email,
+        name: customer.name
+      };
+      return next();
+    }
+
+    return res.status(401).json({ error: 'User not found or disabled' });
+  } catch (err) {
+    return res.status(401).json({ error: 'Invalid token' });
+  }
 };
 
 // Export validated secrets for use in authController

@@ -146,3 +146,18 @@
   @apply bg-gradient-to-b from-primary-500/60 to-accent-500/70 hover:from-primary-500 hover:to-accent-500;
 }
 
+/* Infinite Marquee Animations */
+@keyframes marquee-ltr {
+  0% { transform: translateX(0); }
+  100% { transform: translateX(-50%); }
+}
+@keyframes marquee-rtl {
+  0% { transform: translateX(-50%); }
+  100% { transform: translateX(0); }
+}
+.animate-marquee-ltr {
+  animation: marquee-ltr 30s linear infinite;
+}
+.animate-marquee-rtl {
+  animation: marquee-rtl 30s linear infinite;
+}

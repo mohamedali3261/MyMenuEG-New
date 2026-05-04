@@ -45,33 +45,30 @@ export const getProducts = async (req: Request, res: Response) => {
             where,
             skip,
             take: limit,
-            orderBy: { id: 'desc' },
-            include: {
-              product_specs: true,
-              product_images: true,
-              product_quantity_prices: true,
+            orderBy: { created_at: 'desc' },
+            select: {
+              id: true,
+              name_ar: true,
+              name_en: true,
+              price: true,
+              old_price: true,
+              image_url: true,
+              category_id: true,
+              status: true,
+              stock: true,
+              is_best_seller: true,
+              categories: {
+                select: {
+                  name_ar: true,
+                  name_en: true
+                }
+              },
               product_variants: {
+                take: 1, // Only need first variant for fallback image
                 include: {
                   product_variant_images: true
                 }
-              },
-              product_detail_items: {
-                orderBy: { order_index: 'asc' }
-              },
-              product_faqs: {
-                orderBy: { order_index: 'asc' }
-              },
-              fbt_main: {
-                include: {
-                  related_product: true
-                }
-              },
-              bundle_parent: {
-                include: {
-                  linked_product: true
-                }
-              },
-              categories: true
+              }
             } as any
           }),
           prisma.products.count({ where })
@@ -80,10 +77,10 @@ export const getProducts = async (req: Request, res: Response) => {
         const fullProducts = products.map((p: any) => {
           const variants = p.product_variants.map((v: any) => ({
             ...v,
-            images: v.product_variant_images.map((img: any) => img.url)
+            images: v.product_variant_images?.map((img: any) => img.url) || []
           }));
           
-          // Image Fallback Logic: if image_url is missing, use first variant image
+          // Image Fallback Logic
           let finalImageUrl = p.image_url;
           if (!finalImageUrl && variants.length > 0) {
             const firstVariantWithImages = variants.find((v: any) => v.images && v.images.length > 0);
@@ -95,22 +92,18 @@ export const getProducts = async (req: Request, res: Response) => {
           }
 
           return {
-            ...p,
+            id: p.id,
+            name_ar: p.name_ar,
+            name_en: p.name_en,
+            price: p.price,
+            old_price: p.old_price,
             image_url: finalImageUrl,
+            status: p.status,
+            stock: p.stock,
+            is_best_seller: p.is_best_seller,
+            category_id: p.category_id,
             cat_name_ar: p.categories?.name_ar,
-            cat_name_en: p.categories?.name_en,
-            specs: p.product_specs,
-            images: p.product_images.map((img: any) => img.url || ''),
-            quantity_prices: p.product_quantity_prices,
-            variants,
-            detail_items: p.product_detail_items,
-            faqs: p.product_faqs,
-            fbt_products: p.fbt_main?.map((fbt: any) => fbt.related_product).filter(Boolean) || [],
-            bundle_items: p.bundle_parent?.map((b: any) => ({
-              product_id: b.product_id,
-              quantity: b.quantity,
-              product: b.linked_product
-            })) || []
+            cat_name_en: p.categories?.name_en
           };
         });
 
@@ -206,6 +199,7 @@ export const getProductById = async (req: Request, res: Response) => {
           bundle_items: (product as any).bundle_parent?.map((b: any) => ({
              product_id: b.product_id,
              quantity: b.quantity,
+             discount: b.discount || 0,
              product: b.linked_product
           })) || []
         };
@@ -230,6 +224,10 @@ export const upsertProduct = async (req: Request, res: Response) => {
     const input = productSchema.parse(req.body);
     const productId = input.id || `prod-${Date.now()}`;
     const primaryImage = input.images && input.images.length > 0 ? input.images[0] : '';
+    const existedBefore = Boolean(input.id && await prisma.products.findUnique({
+      where: { id: String(input.id) },
+      select: { id: true }
+    }));
 
     // Simplified upsert using Prisma transaction to handle relations
     await prisma.$transaction(async (tx: any) => {
@@ -420,7 +418,8 @@ export const upsertProduct = async (req: Request, res: Response) => {
           data: input.bundle_items.map((item) => ({
             bundle_id: productId,
             product_id: item.product_id,
-            quantity: item.quantity || 1
+            quantity: item.quantity || 1,
+            discount: item.discount || 0
           }))
         });
       }
@@ -431,6 +430,12 @@ export const upsertProduct = async (req: Request, res: Response) => {
     await cacheInvalidateScope('categories');
     await cacheInvalidateScope('pages');
     await cacheInvalidateScope('pagesBySlug');
+
+    await logAudit(
+      existedBefore ? 'update_product' : 'create_product',
+      (req as any).user?.username || 'system',
+      `${existedBefore ? 'Updated' : 'Created'} product: ${productId}`
+    );
 
     res.json({ success: true, id: productId });
   } catch (err: any) {
@@ -466,6 +471,8 @@ export const deleteProduct = async (req: Request, res: Response) => {
     }
 
     // 2. Delete from DB (relations cascade)
+    await prisma.customer_wishlists.deleteMany({ where: { product_id: String(id) } });
+    await prisma.customer_carts.deleteMany({ where: { product_id: String(id) } });
     await prisma.products.delete({ where: { id: String(id) } });
     await cacheInvalidateScope('productsList');
     await cacheInvalidateScope('productById');

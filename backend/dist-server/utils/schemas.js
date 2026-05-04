@@ -18,10 +18,13 @@ export const orderSchema = z.object({
         name: z.string(),
         price: z.number().positive(),
         quantity: z.number().int().positive(),
+        custom_file_url: z.string().optional(),
+        custom_notes: z.string().optional(),
     })).min(1, 'Order must contain at least one item'),
     total_price: z.number().positive(),
     coupon_id: z.string().nullable().optional(),
     discount_amount: z.number().nonnegative().optional(),
+    payment_method: z.string().optional(),
 });
 // --- Product Validation ---
 export const productSchema = z.object({
@@ -30,7 +33,7 @@ export const productSchema = z.object({
     name_en: z.string().min(2).max(255),
     description_ar: z.string().optional().default(''),
     description_en: z.string().optional().default(''),
-    price: z.coerce.number().positive(),
+    price: z.coerce.number().nonnegative(),
     old_price: z.coerce.number().nonnegative().optional().default(0),
     stock: z.coerce.number().int().nonnegative().optional().default(0),
     category_id: z.string().optional(),
@@ -47,7 +50,7 @@ export const productSchema = z.object({
     })).optional().default([]),
     quantity_prices: z.array(z.object({
         quantity_label: z.string().min(1),
-        price: z.coerce.number().positive(),
+        price: z.coerce.number().nonnegative(),
         old_price: z.coerce.number().nonnegative().optional().default(0),
     })).optional().default([]),
     shipping_info_ar: z.string().optional().default(''),
@@ -69,14 +72,19 @@ export const productSchema = z.object({
         label_ar: z.string().optional().default(''),
         label_en: z.string().optional().default(''),
         sku: z.string().optional().default(''),
-        price: z.coerce.number().positive(),
+        price: z.coerce.number().nonnegative(),
         old_price: z.coerce.number().nonnegative().optional().default(0),
         stock: z.coerce.number().int().nonnegative().optional().default(0),
         is_default: z.boolean().optional().default(false),
         image_url: z.string().optional().default(''),
+        images: z.array(z.string()).optional().default([]), // New field for multiple images
         option_group: z.string().optional().default(''),
         color_value: z.string().optional().default(''),
         size_value: z.string().optional().default(''),
+        color_ar: z.string().optional().default(''),
+        color_en: z.string().optional().default(''),
+        size_ar: z.string().optional().default(''),
+        size_en: z.string().optional().default(''),
         swatch_value: z.string().optional().default(''),
         sort_order: z.coerce.number().int().optional().default(0),
     })).optional().default([]),
@@ -96,6 +104,11 @@ export const productSchema = z.object({
     })).optional().default([]),
     video_url: z.string().optional().default(''),
     fbt_ids: z.array(z.string()).optional().default([]),
+    bundle_items: z.array(z.object({
+        product_id: z.string().min(1),
+        quantity: z.coerce.number().int().positive().default(1),
+        discount: z.coerce.number().nonnegative().optional().default(0)
+    })).optional().default([]),
 }).passthrough();
 // --- Coupon Validation ---
 export const couponValidationSchema = z.object({

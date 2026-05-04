@@ -3,6 +3,7 @@ import { useParams, useNavigate, Link } from 'react-router-dom';
 import { useStore } from '../../store/store';
 import ProductCard from '../../components/ProductCard';
 import ProductPageSlider from '../Home/components/ProductPageSlider';
+import DynamicPagesStrip from '../Home/components/DynamicPagesStrip';
 import { 
   Sparkles, 
   Home, 
@@ -136,7 +137,7 @@ export default function DynamicPage() {
 
   const filteredProducts = useMemo(() => {
     if (!products || !pageInfo) return [];
-    const pageProducts = products.filter(p => p.page_id === pageInfo.id && p.status === 'active');
+    const pageProducts = products.filter(p => p.page_id === pageInfo.id && p.status === 'active' && !((p as any).bundle_items && (p as any).bundle_items.length > 0));
     
     if (!searchQuery.trim()) return pageProducts;
     
@@ -435,6 +436,9 @@ export default function DynamicPage() {
              </div>
           </div>
         )}
+
+        {/* Dynamic Pages Strip - Products for this page */}
+        <DynamicPagesStrip pageId={pageInfo.id} />
         {!pageInfo?.banner_url && (
            <h1 className="text-4xl md:text-5xl font-black mb-12 text-slate-900 dark:text-white">
              {rtl ? pageInfo.name_ar : pageInfo.name_en}

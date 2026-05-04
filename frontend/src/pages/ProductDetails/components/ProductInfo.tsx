@@ -1,8 +1,7 @@
 import { useState, useEffect } from 'react';
 import { useStore } from '../../../store/store';
-import { ShoppingCart, Heart, Flame, Users, Package, Shield, Ruler, UploadCloud, CheckCircle2 } from 'lucide-react';
+import { ShoppingCart, Heart, Flame, Users, Package, Shield, Ruler } from 'lucide-react';
 import { motion } from 'framer-motion';
-import { api } from '../../../api';
 import PremiumDropdown from '../../../components/ui/PremiumDropdown';
 
 interface Props {
@@ -45,9 +44,6 @@ export default function ProductInfo({ product, onVariantChange, onRealVariantSel
   const { rtl, addToCart, wishlist, toggleWishlist, showToast } = useStore();
   const [quantity, setQuantity] = useState(1);
   const [fakeViewers, setFakeViewers] = useState(Math.floor(Math.random() * 8) + 3);
-  const [customNotes, setCustomNotes] = useState('');
-  const [customFileUrl, setCustomFileUrl] = useState('');
-  const [uploadingFile, setUploadingFile] = useState(false);
 
   const hasRealVariants = product.variants && product.variants.length > 0;
   const defaultRealVariant = hasRealVariants
@@ -129,33 +125,10 @@ export default function ProductInfo({ product, onVariantChange, onRealVariantSel
       variant: selectedRealVariant
         ? (rtl ? selectedRealVariant.label_ar : selectedRealVariant.label_en)
         : selectedVariant?.quantity_label,
-      custom_notes: customNotes || undefined,
-      custom_file_url: customFileUrl || undefined
     });
     showToast(rtl ? 'تمت الإضافة للسلة' : 'Added to cart!');
   };
 
-  const handleFileUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
-    const file = e.target.files?.[0];
-    if (!file) return;
-    setUploadingFile(true);
-    const formData = new FormData();
-    formData.append('file', file);
-    try {
-      const res = await api.post('/upload', formData, {
-         headers: { 'Content-Type': 'multipart/form-data' }
-      });
-      if (res.data && res.data.fileUrl) {
-         setCustomFileUrl(res.data.fileUrl);
-         showToast(rtl ? 'تم رفع التصميم!' : 'Design Uploaded!', 'success');
-      }
-    } catch(err) {
-       console.error('File Upload err:', err);
-       showToast(rtl ? 'فشل الرفع' : 'Upload failed', 'error');
-    } finally {
-       setUploadingFile(false);
-    }
-  };
 
   return (
     <div className="flex flex-col gap-6">
@@ -327,55 +300,36 @@ export default function ProductInfo({ product, onVariantChange, onRealVariantSel
       {/* Quantity Pricing Variants (If available) */}
       {hasVariants && (
         <div className="space-y-3 mt-2">
-          <label className="text-xs font-black uppercase text-slate-400 tracking-widest">{rtl ? 'عروض طلبات الجملة' : 'Wholesale Tiers'}</label>
-          <div className="flex flex-col gap-2">
-            {product.quantity_prices!.map((variant, idx) => {
-              const isSelected = selectedVariant?.quantity_label === variant.quantity_label;
-              const hasDiscount = variant.old_price && variant.old_price > variant.price;
-              const discountPercent = hasDiscount ? Math.round(((variant.old_price! - variant.price) / variant.old_price!) * 100) : 0;
-              
-              return (
-                <button
-                  key={idx}
-                  onClick={() => {
-                    setSelectedVariant(variant);
-                    onVariantChange?.(variant);
-                  }}
-                  className={`relative w-full px-4 py-3 rounded-xl border transition-all flex items-center justify-between group overflow-hidden ${isSelected ? 'border-primary-500 bg-primary-500/5 shadow-md shadow-primary-500/10' : 'border-slate-200 dark:border-white/10 hover:border-primary-500/30 hover:bg-slate-50 dark:hover:bg-white/5'}`}
-                >
-                  {isSelected && (
-                    <div className="absolute top-0 left-0 w-1 h-full bg-primary-500 rounded-l-xl" />
-                  )}
-                  <div className="flex items-center gap-3">
-                    <div className={`w-4 h-4 rounded-full border-2 flex items-center justify-center shrink-0 ${isSelected ? 'border-primary-500' : 'border-slate-300 dark:border-slate-600'}`}>
-                      {isSelected && <div className="w-2 h-2 rounded-full bg-primary-500" />}
-                    </div>
-                    <div className="flex flex-col items-start gap-0.5">
-                      <span className={`text-sm font-black tracking-tight ${isSelected ? 'text-primary-600 dark:text-primary-400' : 'text-slate-800 dark:text-white'}`}>
-                        {variant.quantity_label}
-                      </span>
-                      {hasDiscount && (
-                        <span className="text-[10px] uppercase font-bold text-emerald-500 bg-emerald-500/10 px-1.5 rounded-md">
-                          {rtl ? `توفير ${discountPercent}%` : `Save ${discountPercent}%`}
-                        </span>
-                      )}
-                    </div>
-                  </div>
-                  
-                  <div className="flex flex-col items-end gap-0.5">
-                    <span className={`text-base font-black ${isSelected ? 'text-primary-600 dark:text-primary-400' : 'text-slate-900 dark:text-white'}`}>
-                      {variant.price.toLocaleString()} <span className="text-[10px] opacity-50">EGP</span>
-                    </span>
-                    {hasDiscount && (
-                      <span className="text-[10px] font-bold text-slate-400 line-through">
-                        {variant.old_price!.toLocaleString()} EGP
-                      </span>
-                    )}
-                  </div>
-                </button>
-              )
-            })}
+          <div className="flex items-center gap-2 mb-1">
+            <div className="p-1.5 rounded-lg bg-emerald-500/10 text-emerald-500">
+               <Package size={14} />
+            </div>
+            <label className="text-xs font-black uppercase text-slate-400 tracking-widest">{rtl ? 'عروض طلبات الجملة' : 'Wholesale Tiers'}</label>
           </div>
+          <PremiumDropdown
+            value={selectedVariant ? String(product.quantity_prices!.findIndex(v => v.quantity_label === selectedVariant.quantity_label)) : '0'}
+            rtl={rtl}
+            onChange={(val) => {
+              const variant = product.quantity_prices![Number(val)];
+              if (variant) {
+                setSelectedVariant(variant);
+                onVariantChange?.(variant);
+              }
+            }}
+            options={product.quantity_prices!.map((v, idx) => {
+              const hasDiscount = v.old_price && v.old_price > v.price;
+              const discountPercent = hasDiscount ? Math.round(((v.old_price! - v.price) / v.old_price!) * 100) : 0;
+              const discountAr = hasDiscount ? ` (توفير ${discountPercent}%)` : '';
+              const discountEn = hasDiscount ? ` (Save ${discountPercent}%)` : '';
+              return {
+                value: String(idx),
+                labelAr: `${v.quantity_label} كوب - ${v.price.toLocaleString()} EGP${discountAr}`,
+                labelEn: `${v.quantity_label} cups - ${v.price.toLocaleString()} EGP${discountEn}`
+              };
+            })}
+            placeholderAr="-- اختر الكمية --"
+            placeholderEn="-- Select Quantity --"
+          />
         </div>
       )}
 
@@ -394,32 +348,6 @@ export default function ProductInfo({ product, onVariantChange, onRealVariantSel
                 <div className="font-black text-rose-500 text-xs px-2 py-1 bg-rose-500/10 rounded-md shrink-0">x{bItem.quantity}</div>
              </div>
            ))}
-        </div>
-      )}
-
-      {/* Customization Printing Settings */}
-      {product.allow_custom_print && (
-        <div className="bg-indigo-50 dark:bg-indigo-500/5 border border-indigo-200 dark:border-indigo-500/10 p-4 rounded-2xl flex flex-col gap-4">
-           <div className="flex items-center justify-between">
-              <div>
-                <h3 className="text-sm font-black text-indigo-900 dark:text-indigo-400 capitalize">{rtl ? 'تصميم مخصص' : 'Custom Design'}</h3>
-                <p className="text-xs text-indigo-700/60 dark:text-indigo-300/60 font-medium">{rtl ? 'قم بإرفاق لوجو أو شرح المطبوعات للطلب' : 'Attach your logo or printing instructions.'}</p>
-              </div>
-              <div className="relative overflow-hidden group">
-                 <input type="file" className="absolute inset-0 opacity-0 cursor-pointer z-10" accept="image/*,.pdf,.ai,.psd" onChange={handleFileUpload} disabled={uploadingFile} />
-                 <button className={`flex items-center justify-center gap-2 px-4 py-2 rounded-xl text-xs font-bold transition-all ${customFileUrl ? 'bg-emerald-500 text-white' : 'bg-indigo-500 text-white group-hover:scale-105'}`}>
-                   {uploadingFile ? <div className="w-4 h-4 border-2 border-white border-t-transparent rounded-full animate-spin" /> : customFileUrl ? <CheckCircle2 size={16} /> : <UploadCloud size={16} />}
-                   {customFileUrl ? (rtl ? 'تم الإرفاق!' : 'Uploaded!') : (rtl ? 'تصفح الملفات' : 'Browse Files')}
-                 </button>
-              </div>
-           </div>
-           
-           <textarea 
-             placeholder={rtl ? "ملاحظات إضافية للتصميم (اختياري)..." : "Additional design notes (optional)..."}
-             value={customNotes}
-             onChange={e => setCustomNotes(e.target.value)}
-             className="w-full h-16 bg-white dark:bg-black/20 border border-indigo-100 dark:border-indigo-500/10 rounded-xl px-3 py-2 text-xs focus:ring-2 focus:ring-indigo-500/50 focus:border-indigo-500 outline-none resize-none placeholder-indigo-300 dark:placeholder-indigo-700 transition-all font-medium"
-           />
         </div>
       )}
 

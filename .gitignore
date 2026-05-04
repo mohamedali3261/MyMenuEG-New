@@ -10,11 +10,13 @@ lerna-debug.log*
 node_modules
 dist
 dist-ssr
+dist-server
 *.local
 
 # Environment Variables - NEVER upload these!
 .env
 .env.*
+!.env.example
 server/.env
 
 # Editor directories and files

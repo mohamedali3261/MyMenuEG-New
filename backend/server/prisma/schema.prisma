@@ -23,6 +23,57 @@ model admins {
   @@index([username])
 }
 
+model customers {
+  id          String    @id @default(uuid()) @db.VarChar(36)
+  email       String    @unique(map: "email") @db.VarChar(255)
+  password    String?   @db.VarChar(255)
+  name        String?   @db.VarChar(255)
+  google_id   String?   @db.VarChar(100)
+  phone       String?   @db.VarChar(50)
+  governorate String?   @db.VarChar(100)
+  city        String?   @db.VarChar(100)
+  address     String?   @db.VarChar(500)
+  avatar      String?   @db.VarChar(500)
+  is_active   Boolean?  @default(true)
+  created_at  DateTime  @default(now()) @db.Timestamp(0)
+  updated_at  DateTime? @db.Timestamp(0)
+  orders      orders[]
+  wishlists   customer_wishlists[]
+  cart_items  customer_carts[]
+  notifications customer_notifications[]
+  reviews     product_reviews[]
+
+  @@index([email])
+  @@index([google_id])
+}
+
+model customer_wishlists {
+  id          String   @id @default(uuid()) @db.VarChar(36)
+  customer_id String   @db.VarChar(36)
+  product_id  String   @db.VarChar(36)
+  created_at  DateTime @default(now()) @db.Timestamp(0)
+  customer    customers @relation(fields: [customer_id], references: [id], onDelete: Cascade)
+
+  @@unique([customer_id, product_id])
+  @@index([customer_id])
+}
+
+model customer_carts {
+  id          String   @id @default(uuid()) @db.VarChar(36)
+  customer_id String   @db.VarChar(36)
+  product_id  String   @db.VarChar(36)
+  variant     String   @default("") @db.VarChar(255)
+  quantity    Int      @default(1)
+  is_bundle   Boolean? @default(false)
+  bundle_data String?  @db.Text
+  created_at  DateTime @default(now()) @db.Timestamp(0)
+  updated_at  DateTime? @db.Timestamp(0)
+  customer    customers @relation(fields: [customer_id], references: [id], onDelete: Cascade)
+
+  @@unique([customer_id, product_id, variant])
+  @@index([customer_id])
+}
+
 model refresh_tokens {
   id          String   @id @default(uuid()) @db.VarChar(36)
   admin_id    String   @db.VarChar(100)
@@ -128,15 +179,17 @@ model product_bundle_items {
   bundle_id       String    @db.VarChar(100)
   product_id      String    @db.VarChar(100)
   quantity        Int       @default(1)
+  discount        Float     @default(0)
   bundle_product  products  @relation("BundleParent", fields: [bundle_id], references: [id], onDelete: Cascade)
   linked_product  products  @relation("BundleChild", fields: [product_id], references: [id], onDelete: Cascade)
-  
+
   @@index([bundle_id])
   @@index([product_id])
 }
 
 model orders {
   id              String          @id @db.VarChar(100)
+  customer_id     String?         @db.VarChar(36)
   customer_name   String?         @db.VarChar(255)
   phone           String?         @db.VarChar(50)
   email           String?         @db.VarChar(255)
@@ -156,12 +209,14 @@ model orders {
   tracking_id     String?         @db.VarChar(100)
   notifications   notifications[]
   order_items     order_items[]
+  customers       customers?      @relation(fields: [customer_id], references: [id])
 
   @@index([phone])
   @@index([status])
   @@index([created_at])
   @@index([status, created_at])
   @@index([payment_status])
+  @@index([customer_id])
 }
 
 model product_images {
@@ -320,16 +375,20 @@ model settings {
 model product_reviews {
   id          Int      @id @default(autoincrement())
   product_id  String   @db.VarChar(100)
+  customer_id String?  @db.VarChar(36)
   user_name   String   @db.VarChar(100)
   rating      Int      @db.TinyInt
   comment_ar  String?  @db.Text
   comment_en  String?  @db.Text
   status      String   @default("pending") @db.VarChar(20)
   created_at  DateTime @default(now()) @db.Timestamp(0)
-  products    products? @relation(fields: [product_id], references: [id], onDelete: Cascade, onUpdate: Restrict)
+  products    products?  @relation(fields: [product_id], references: [id], onDelete: Cascade, onUpdate: Restrict)
+  customers   customers? @relation(fields: [customer_id], references: [id], onDelete: SetNull, onUpdate: Restrict)
 
   @@index([product_id])
   @@index([status])
+  @@index([customer_id])
+  @@unique([product_id, customer_id])
 }
 
 model product_fbt {
@@ -342,6 +401,23 @@ model product_fbt {
 
   @@index([product_id])
   @@index([related_prod_id])
+}
+
+model contact_submissions {
+  id              Int      @id @default(autoincrement())
+  name            String   @db.VarChar(100)
+  email           String   @db.VarChar(255)
+  phone           String   @db.VarChar(50)
+  subject         String   @db.VarChar(200)
+  message         String   @db.Text
+  custom_file_url String? @db.VarChar(500)
+  custom_notes    String? @db.Text
+  status          String   @default("new") @db.VarChar(20)
+  created_at      DateTime @default(now()) @db.Timestamp(0)
+  updated_at      DateTime?       @db.Timestamp(0)
+
+  @@index([status])
+  @@index([created_at])
 }
 
 model store_pages {
@@ -367,6 +443,94 @@ model store_pages {
   spotlight_product_id String?       @db.VarChar(100)
   countdown_end_date   DateTime?     @db.Timestamp(0)
   show_search          Boolean?      @default(false)
+  image_url            String?       @db.VarChar(255)
   hero_slides          hero_slides[]
+  gsap_slides          gsap_slides[]
   products       products[]
+}
+
+model gsap_slides {
+  id          String       @id @db.VarChar(100)
+  place       String?      @db.VarChar(255)
+  title       String?      @db.VarChar(255)
+  title2      String?      @db.VarChar(255)
+  description String?      @db.Text
+  image       String?      @db.VarChar(255)
+  btn_link    String?      @db.VarChar(255)
+  page_id     String?      @db.VarChar(100)
+  order_index Int?         @default(0)
+  created_at  DateTime     @default(now()) @db.Timestamp(0)
+  store_pages store_pages? @relation(fields: [page_id], references: [id], onDelete: Cascade, onUpdate: Restrict, map: "gsap_slides_ibfk_1")
+
+  @@index([page_id], map: "gsap_slides_page_id")
+  @@index([order_index])
+}
+
+model marquee_logos {
+  id              String   @id @db.VarChar(100)
+  image_url       String?  @db.VarChar(255)
+  name_ar         String?  @db.VarChar(255)
+  name_en         String?  @db.VarChar(255)
+  strip           String?  @default("1") @db.VarChar(10)
+  order_index     Int?     @default(0)
+  type            String?  @default("image") @db.VarChar(10)
+  text_ar         String?  @db.Text
+  text_en         String?  @db.Text
+  color           String?  @default("#ffffff") @db.VarChar(20)
+  background_color String?  @default("#1a1a1a") @db.VarChar(20)
+  speed           Int?     @default(30)
+  created_at      DateTime @default(now()) @db.Timestamp(0)
+
+  @@index([strip])
+  @@index([order_index])
+}
+
+model marquee_settings {
+  id      String   @id @default("main") @db.VarChar(50)
+  enabled Boolean  @default(true)
+  created_at DateTime @default(now()) @db.Timestamp(0)
+}
+
+model svg_marquee {
+  id                String   @id @default("main") @db.VarChar(50)
+  left_text_1       String?  @default("Sip, smile, repeat") @db.VarChar(255)
+  left_text_2       String?  @default("Taste the sparkle") @db.VarChar(255)
+  right_text_1      String?  @default("Sip, smile, repeat") @db.VarChar(255)
+  right_text_2      String?  @default("Taste the sparkle") @db.VarChar(255)
+  text_color        String?  @default("#ff0000") @db.VarChar(20)
+  animation_duration Int?    @default(15)
+  show_can          Boolean? @default(true)
+  show_bg_svg       Boolean? @default(true)
+  can_image_url     String?  @db.VarChar(255)
+  can_size          Int?     @default(200)
+  font_family       String?  @default("Lilita One, sans-serif") @db.VarChar(100)
+  enabled           Boolean? @default(true)
+  created_at        DateTime @default(now()) @db.Timestamp(0)
+  items             svg_marquee_items[]
+}
+
+model svg_marquee_items {
+  id            String   @id @default(uuid()) @db.VarChar(36)
+  svg_marquee_id String  @default("main") @db.VarChar(50)
+  type          String   @default("image") @db.VarChar(20)
+  image_url     String?  @db.VarChar(255)
+  text_ar       String?  @db.VarChar(255)
+  text_en       String?  @db.VarChar(255)
+  strip         String   @default("1") @db.VarChar(10)
+  order_index   Int      @default(0)
+  created_at    DateTime @default(now()) @db.Timestamp(0)
+  svg_marquee   svg_marquee @relation(fields: [svg_marquee_id], references: [id], onDelete: Cascade)
+}
+
+model customer_notifications {
+  id          String   @id @default(uuid()) @db.VarChar(36)
+  customer_id String   @db.VarChar(36)
+  title       String   @db.VarChar(255)
+  message     String   @db.VarChar(1000)
+  is_read     Boolean  @default(false)
+  created_at  DateTime @default(now()) @db.Timestamp(0)
+  customer    customers @relation(fields: [customer_id], references: [id], onDelete: Cascade)
+
+  @@index([customer_id])
+  @@index([is_read])
 }

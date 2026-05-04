@@ -1,8 +1,9 @@
 import { useState, useEffect } from 'react';
 import { useStore } from '../../../../store/store';
 import { api } from '../../../../api';
-import { HelpCircle, Save, Loader2, Plus, Trash2 } from 'lucide-react';
+import { HelpCircle, Plus, Trash2 } from 'lucide-react';
 import toast from 'react-hot-toast';
+import SaveButton from '../../../../components/SaveButton';
 
 type FaqItem = {
   qAr: string;
@@ -120,14 +121,13 @@ export default function FaqSettingsPanel() {
       </div>
 
       <div className="mt-8 flex justify-end">
-        <button
+        <SaveButton
           onClick={handleSave}
-          disabled={saving}
-          className="flex items-center gap-2 px-6 py-3 bg-primary-500 text-white rounded-xl hover:bg-primary-600 transition-colors disabled:opacity-50"
-        >
-          {saving ? <Loader2 size={20} className="animate-spin" /> : <Save size={20} />}
-          {rtl ? 'حفظ التغييرات' : 'Save Changes'}
-        </button>
+          isSaving={saving}
+          rtl={rtl}
+          color="glass"
+          checkHasChanges={false}
+        />
       </div>
     </div>
   );

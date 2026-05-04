@@ -71,3 +71,21 @@ export const getStats = async (req, res) => {
         res.status(500).json({ error: 'Failed to fetch stats' });
     }
 };
+export const getSidebarCounts = async (req, res) => {
+    try {
+        const [pendingOrders, newMessages, totalCustomers] = await Promise.all([
+            prisma.orders.count({ where: { status: 'pending' } }),
+            prisma.contact_submissions.count({ where: { status: 'new' } }),
+            prisma.orders.groupBy({ by: ['phone'], _count: { _all: true } })
+        ]);
+        res.json({
+            pendingOrders,
+            newMessages,
+            totalCustomers: totalCustomers.length
+        });
+    }
+    catch (err) {
+        console.error(err);
+        res.status(500).json({ error: 'Failed to fetch sidebar counts' });
+    }
+};

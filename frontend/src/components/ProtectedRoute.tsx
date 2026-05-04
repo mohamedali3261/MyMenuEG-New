@@ -13,7 +13,7 @@ export default function ProtectedRoute({ permission }: ProtectedRouteProps) {
   }
 
   if (!token || !user) {
-    return <Navigate to="/admin/login" replace />;
+    return <Navigate to="/login" replace />;
   }
 
   // If a specific permission is required, check if user has it or is super admin

@@ -162,7 +162,7 @@ export default function Disposables() {
          </div>
          
          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-8">
-            {products.filter(p => p.is_best_seller).map(p => (
+            {products.filter(p => p.is_best_seller && !((p as any).bundle_items && (p as any).bundle_items.length > 0)).map(p => (
                <ProductCard key={p.id} product={p} />
             ))}
          </div>
@@ -172,7 +172,7 @@ export default function Disposables() {
 
       <div className="container mx-auto px-6 space-y-32 pb-32">
         {activeCategories.map((cat) => {
-          const catProducts = products.filter(p => p.category_id === cat.id);
+          const catProducts = products.filter(p => p.category_id === cat.id && !((p as any).bundle_items && (p as any).bundle_items.length > 0));
           if (catProducts.length === 0) return null;
 
           return (

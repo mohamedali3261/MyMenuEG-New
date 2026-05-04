@@ -1,11 +1,12 @@
 import { useState, useEffect } from 'react';
 import { useStore } from '../../../store/store';
-import { Plus, Trash2, Layout, Image as ImageIcon, Loader2, Save } from 'lucide-react';
+import { Plus, Trash2, Layout, Image as ImageIcon, Loader2, Save, Layers } from 'lucide-react';
 import { api } from '../../../api';
 import ConfirmModal from '../components/ConfirmModal';
 import PremiumDropdown from '../../../components/ui/PremiumDropdown';
 import { SLIDER_TEMPLATES } from './sliderTemplates';
 import { resolveAssetUrl } from '../../../utils/assetUrl';
+import GsapSliderManager from './GsapSliderManager';
 
 type Slide = {
   id: string;
@@ -27,6 +28,7 @@ export default function SliderManager() {
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
   const [interval, setIntervalVal] = useState('3'); // Duration in seconds
+  const [hideEmptySlider, setHideEmptySlider] = useState(false);
 
   // Modal State
   const [deleteModal, setDeleteModal] = useState<{isOpen: boolean, id: string | null}>({
@@ -50,6 +52,7 @@ export default function SliderManager() {
     page_id: ''
   });
   const [templateKey, setTemplateKey] = useState('');
+  const [showGsapPanel, setShowGsapPanel] = useState(false);
 
   const fetchSlides = () => {
     setLoading(true);
@@ -59,7 +62,10 @@ export default function SliderManager() {
       .finally(() => setLoading(false));
 
     api.get('/settings')
-      .then(res => setIntervalVal(res.data.sliderInterval || '3'))
+      .then(res => {
+        setIntervalVal(res.data.sliderInterval || '3');
+        setHideEmptySlider(res.data.hideEmptySlider === 'true');
+      })
       .catch(console.error);
   };
 
@@ -139,10 +145,10 @@ export default function SliderManager() {
   const saveInterval = async () => {
     setSaving(true);
     try {
-      await api.post('/settings', { sliderInterval: interval });
-      showToast(rtl ? 'تم حفظ التوقيت بنجاح' : 'Interval saved successfully');
+      await api.post('/settings', { sliderInterval: interval, hideEmptySlider: String(hideEmptySlider) });
+      showToast(rtl ? 'تم حفظ الإعدادات بنجاح' : 'Settings saved successfully');
     } catch {
-      showToast('Error saving interval', 'error');
+      showToast('Error saving settings', 'error');
     } finally {
       setSaving(false);
     }
@@ -164,19 +170,39 @@ export default function SliderManager() {
                 <Save size={18} />
              </button>
           </div>
+          <div className="glass-card flex items-center gap-3 px-4 py-1.5">
+             <span className="text-sm font-semibold whitespace-nowrap">{rtl ? 'إخفاء:' : 'Hide:'}</span>
+             <button
+               onClick={() => { const next = !hideEmptySlider; setHideEmptySlider(next); api.post('/settings', { hideEmptySlider: String(next) }).catch(() => {}); }}
+               className={`relative w-11 h-6 rounded-full transition-colors ${hideEmptySlider ? 'bg-primary-500' : 'bg-slate-300 dark:bg-white/20'}`}
+             >
+               <span className={`absolute top-0.5 ${hideEmptySlider ? 'right-0.5' : 'left-0.5'} w-5 h-5 bg-white rounded-full shadow transition-all`} />
+             </button>
+          </div>
           
           {!showForm && (
-            <button 
-              onClick={() => {
-                setFormData({ id: '', image_url: '', title_ar: '', title_en: '', subtitle_ar: '', subtitle_en: '', btn_text_ar: '', btn_text_en: '', btn_link: '/products', order_index: slides.length, page_id: '' });
-                setTemplateKey('');
-                setShowForm(true);
-              }} 
-              className="btn-primary flex items-center gap-2 whitespace-nowrap"
-            >
-              <Plus size={20} />
-              {rtl ? 'إضافة شريحة' : 'Add Slide'}
-            </button>
+            <div className="flex items-center gap-3">
+              <button 
+                onClick={() => setShowGsapPanel(!showGsapPanel)}
+                className={`flex items-center gap-2 px-4 py-2.5 rounded-2xl font-bold text-sm transition-all duration-300 border-2 ${showGsapPanel ? 'bg-primary-500 text-white border-primary-500 shadow-lg shadow-primary-500/25' : 'border-slate-300 dark:border-white/20 text-slate-600 dark:text-slate-400 hover:border-primary-500 hover:text-primary-500'}`}
+              >
+                <Layers size={18} />
+                <span>{rtl ? 'السلايدر المتقدم' : 'GSAP Slider'}</span>
+              </button>
+              <button 
+                onClick={() => {
+                  setFormData({ id: '', image_url: '', title_ar: '', title_en: '', subtitle_ar: '', subtitle_en: '', btn_text_ar: '', btn_text_en: '', btn_link: '/products', order_index: slides.length, page_id: '' });
+                  setTemplateKey('');
+                  setShowForm(true);
+                }} 
+                className="group flex items-center gap-3 px-5 py-2.5 rounded-2xl font-black text-sm transition-all duration-300 bg-primary-500 text-white shadow-lg shadow-primary-500/25 hover:bg-primary-600 hover:shadow-xl hover:shadow-primary-500/30 hover:-translate-y-0.5 active:translate-y-0 dark:bg-primary-600 dark:hover:bg-primary-500 whitespace-nowrap"
+              >
+                <span className="w-7 h-7 rounded-lg bg-white/30 flex items-center justify-center group-hover:rotate-90 transition-transform duration-300">
+                  <Plus size={16} strokeWidth={3} />
+                </span>
+                <span>{rtl ? 'إضافة شريحة' : 'Add Slide'}</span>
+              </button>
+            </div>
           )}
         </div>
       </div>
@@ -279,7 +305,7 @@ export default function SliderManager() {
 
           <div className="mt-8 flex justify-end gap-4 border-t border-white/10 pt-6">
              <button onClick={() => setShowForm(false)} className="px-6 py-3 rounded-xl hover:bg-white/5 transition-colors">{rtl ? 'إلغاء' : 'Cancel'}</button>
-             <button onClick={handleSave} disabled={saving} className="btn-primary flex items-center gap-2 px-10">
+             <button onClick={handleSave} disabled={saving} className="flex items-center gap-2 px-5 py-2.5 rounded-xl font-black text-sm transition-all duration-300 bg-rose-500 text-white shadow-lg shadow-rose-500/20 hover:bg-rose-600 hover:scale-105 active:scale-95">
                {saving ? <Loader2 size={20} className="animate-spin" /> : <Save size={20} />}
                {rtl ? 'حفظ الشريحة' : 'Save Slide'}
              </button>
@@ -332,6 +358,8 @@ export default function SliderManager() {
            )}
         </div>
       )}
+
+      {showGsapPanel && <GsapSliderManager />}
 
       <ConfirmModal
         isOpen={deleteModal.isOpen}

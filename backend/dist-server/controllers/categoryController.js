@@ -4,11 +4,12 @@ import { cacheInvalidateScope, cacheResolveSWR } from '../services/cacheService'
 import fs from 'fs';
 import path from 'path';
 import { fileURLToPath } from 'url';
+import { logAudit } from '../services/auditService';
 const __cfname = fileURLToPath(import.meta.url);
 const __cdirname = path.dirname(__cfname);
 /** Convert a name to a safe folder name: lowercase, spaces → hyphens, strip non-ascii */
 export const toFolderName = (name) => name.trim().toLowerCase().replace(/\s+/g, '-').replace(/[^a-z0-9_-]/g, '').slice(0, 60) || 'unnamed';
-const UPLOADS_BASE = path.join(__cdirname, '../../../../frontend/public/uploads/products');
+const UPLOADS_BASE = path.join(__cdirname, '../../../../uploads/products');
 import { getQueryInt } from '../utils/helpers';
 export const getCategories = async (req, res) => {
     try {
@@ -19,7 +20,15 @@ export const getCategories = async (req, res) => {
         const cacheKey = hasPagination ? `page:${page}:limit:${limit}` : 'all';
         const payload = await cacheResolveSWR('categories', cacheKey, async () => {
             if (!hasPagination) {
-                const categories = await prisma.categories.findMany();
+                const categories = await prisma.categories.findMany({
+                    select: {
+                        id: true,
+                        name_ar: true,
+                        name_en: true,
+                        icon: true,
+                        status: true
+                    }
+                });
                 return JSON.stringify(categories);
             }
             const [categories, total] = await Promise.all([
@@ -27,6 +36,15 @@ export const getCategories = async (req, res) => {
                     skip,
                     take: limit,
                     orderBy: { id: 'desc' },
+                    select: {
+                        id: true,
+                        name_ar: true,
+                        name_en: true,
+                        icon: true,
+                        status: true,
+                        subtitle_ar: true,
+                        subtitle_en: true
+                    }
                 }),
                 prisma.categories.count(),
             ]);
@@ -48,6 +66,10 @@ export const upsertCategory = async (req, res) => {
     try {
         const input = req.body;
         const catId = input.id || `CAT-${Date.now()}`;
+        const existedBefore = Boolean(input.id && await prisma.categories.findUnique({
+            where: { id: String(input.id) },
+            select: { id: true }
+        }));
         const category = await prisma.categories.upsert({
             where: { id: catId },
             create: {
@@ -73,6 +95,7 @@ export const upsertCategory = async (req, res) => {
         const folderName = toFolderName(input.name_en || input.name_ar || catId);
         const categoryDir = path.join(UPLOADS_BASE, folderName);
         await fs.promises.mkdir(categoryDir, { recursive: true });
+        await logAudit(existedBefore ? 'update_category' : 'create_category', req.user?.username || 'system', `${existedBefore ? 'Updated' : 'Created'} category: ${catId}`);
         res.json({ success: true, id: catId });
     }
     catch (err) {
@@ -108,6 +131,7 @@ export const deleteCategory = async (req, res) => {
         }
         await prisma.categories.delete({ where: { id: String(id) } });
         await cacheInvalidateScope('categories');
+        await logAudit('delete_category', req.user?.username || 'system', `Deleted category: ${String(id)}`);
         res.json({ success: true });
     }
     catch (err) {

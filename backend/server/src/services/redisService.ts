@@ -17,7 +17,7 @@ export const initRedis = async (): Promise<boolean> => {
 
   try {
     // Dynamic import for redis
-    // @ts-ignore
+    // @ts-expect-error redis is optional at runtime and may be absent in some environments
     const { createClient } = await import('redis');
     redisClient = createClient({ url: REDIS_URL });
 

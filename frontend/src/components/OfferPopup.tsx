@@ -29,13 +29,12 @@ export default function OfferPopup() {
     const isTestMode = params.get('test_popup') === 'true';
 
     if (isTestMode) {
-      console.log('%c [POPUP] Force Test Mode enabled! Bypassing all checks. ', 'background: #eb5e28; color: #fff; font-weight: bold;');
+      // Test mode active
     }
 
     // 1. Fetch Popup Config from Settings
     fetchSettings().then(settings => {
       if (!settings?.popup_settings) {
-        console.warn('[POPUP] No settings found in DB.');
         return;
       }
 
@@ -46,15 +45,12 @@ export default function OfferPopup() {
         const isEnabled = parsed.enabled === true || parsed.enabled === 'true';
         
         if (!isEnabled && !isTestMode) {
-          console.log('[POPUP] Skipping: Disabled in admin settings.');
           return;
         }
 
         setConfig(parsed);
         const delay = isTestMode ? 0.5 : (parseInt(String(parsed.delaySeconds ?? ''), 10) || 5);
         
-        console.log(`[POPUP] SUCCESS: Found setup! Showing in ${delay} seconds.`);
-
         // 3. Trigger showing
         const timer = setTimeout(() => {
           setShow(true);

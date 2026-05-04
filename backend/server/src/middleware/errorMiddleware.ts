@@ -1,5 +1,6 @@
 import { Request, Response, NextFunction } from 'express';
 import { logger } from '../utils/logger';
+import { isAppError } from '../utils/appError';
 
 /**
  * Global Error Handling Middleware
@@ -16,33 +17,42 @@ export const errorHandler = (err: any, req: Request, res: Response, _next: NextF
     requestId: res.locals.requestId,
   });
 
-  // In production, never expose internal error details
-  const response: any = {
-    success: false,
-    message: isProduction 
-      ? 'An unexpected error occurred. Please try again later.' 
-      : err.message || 'Internal Server Error',
-  };
-
-  // Only include error details in development
-  if (!isProduction) {
-    response.error = err.message;
-    response.stack = err.stack;
+  if (isAppError(err)) {
+    const appErrResponse: any = {
+      success: false,
+      error: {
+        code: err.code,
+        message: err.message,
+        requestId: res.locals.requestId,
+      },
+    };
+    if (!isProduction && err.details !== undefined) {
+      appErrResponse.error.details = err.details;
+    }
+    return res.status(err.statusCode).json(appErrResponse);
   }
 
   // Handle specific error types
   if (err.name === 'ValidationError') {
     return res.status(400).json({
       success: false,
-      message: 'Validation failed',
-      errors: err.details || [err.message],
+      error: {
+        code: 'VALIDATION_ERROR',
+        message: 'Validation failed',
+        details: err.details || [err.message],
+        requestId: res.locals.requestId,
+      },
     });
   }
 
   if (err.name === 'UnauthorizedError' || err.name === 'JsonWebTokenError') {
     return res.status(401).json({
       success: false,
-      message: 'Authentication failed',
+      error: {
+        code: 'AUTHENTICATION_FAILED',
+        message: 'Authentication failed',
+        requestId: res.locals.requestId,
+      },
     });
   }
 
@@ -50,8 +60,26 @@ export const errorHandler = (err: any, req: Request, res: Response, _next: NextF
     // Prisma unique constraint violation
     return res.status(409).json({
       success: false,
-      message: 'A record with this value already exists',
+      error: {
+        code: 'UNIQUE_CONSTRAINT_VIOLATION',
+        message: 'A record with this value already exists',
+        requestId: res.locals.requestId,
+      },
     });
+  }
+
+  const response: any = {
+    success: false,
+    error: {
+      code: 'INTERNAL_ERROR',
+      message: isProduction
+        ? 'An unexpected error occurred. Please try again later.'
+        : err.message || 'Internal Server Error',
+      requestId: res.locals.requestId,
+    },
+  };
+  if (!isProduction) {
+    response.error.stack = err.stack;
   }
 
   res.status(statusCode).json(response);

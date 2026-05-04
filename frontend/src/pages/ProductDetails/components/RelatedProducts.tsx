@@ -30,8 +30,8 @@ export default function RelatedProducts({ categoryId, currentId }: RelatedProps)
       .then(res => {
         // Correctly handle paginated response: { products: [...], total, ... }
         const rawProds = res.data.products || [];
-        const related = (rawProds as RelatedProduct[]).filter((p) =>
-          p.category_id === categoryId && p.id !== currentId
+        const related = (rawProds as RelatedProduct[]).filter((p: any) =>
+          p.category_id === categoryId && p.id !== currentId && !(p.bundle_items && p.bundle_items.length > 0)
         ).slice(0, 4);
         setProducts(related);
       })

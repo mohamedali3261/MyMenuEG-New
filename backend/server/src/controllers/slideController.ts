@@ -2,6 +2,7 @@ import { Request, Response } from 'express';
 import prisma from '../lib/prisma';
 import { removeFile } from '../utils/fileUtils';
 import { getQueryParam } from '../utils/helpers';
+import { logAudit } from '../services/auditService';
 
 export const getSlides = async (req: Request, res: Response) => {
   try {
@@ -32,6 +33,10 @@ export const upsertSlide = async (req: Request, res: Response) => {
   try {
     const input = req.body;
     const slideId = input.id || `SLD-${Date.now()}`;
+    const existedBefore = Boolean(input.id && await prisma.hero_slides.findUnique({
+      where: { id: String(input.id) },
+      select: { id: true }
+    }));
     const page_id = input.page_id || null;
 
     const slide = await prisma.hero_slides.upsert({
@@ -63,6 +68,12 @@ export const upsertSlide = async (req: Request, res: Response) => {
       }
     });
 
+    await logAudit(
+      existedBefore ? 'update_slide' : 'create_slide',
+      (req as any).user?.username || 'system',
+      `${existedBefore ? 'Updated' : 'Created'} slide: ${slideId}`
+    );
+
     res.json({ success: true, id: slideId });
   } catch (err) {
     console.error(err);
@@ -80,6 +91,7 @@ export const deleteSlide = async (req: Request, res: Response) => {
     }
 
     await prisma.hero_slides.delete({ where: { id: String(id) } });
+    await logAudit('delete_slide', (req as any).user?.username || 'system', `Deleted slide: ${String(id)}`);
     res.json({ success: true });
   } catch (err) {
     console.error(err);

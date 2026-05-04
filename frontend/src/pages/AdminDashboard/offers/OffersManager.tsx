@@ -102,8 +102,8 @@ export default function OffersManager() {
         </h1>
         
         <div className="flex items-center gap-4">
-           <div className={`px-4 py-2 rounded-xl text-sm font-black uppercase flex items-center gap-2 ${form.enabled ? 'bg-green-500/10 text-green-500 border border-green-500/20' : 'bg-slate-500/10 text-slate-500 border border-slate-500/20'}`}>
-              <div className={`w-2 h-2 rounded-full ${form.enabled ? 'bg-green-500 animate-pulse' : 'bg-slate-500'}`} />
+           <div className={`px-4 py-2 rounded-xl text-sm font-black uppercase flex items-center gap-2 ${form.enabled ? 'bg-primary-500/10 text-primary-500 border border-primary-500/20' : 'bg-slate-500/10 text-slate-500 border border-slate-500/20'}`}>
+              <div className={`w-2 h-2 rounded-full ${form.enabled ? 'bg-primary-500 animate-pulse' : 'bg-slate-500'}`} />
               {form.enabled ? (rtl ? 'مفعل الآن' : 'Active Now') : (rtl ? 'معطل' : 'Disabled')}
            </div>
         </div>
@@ -121,9 +121,11 @@ export default function OffersManager() {
           </div>
           <button 
             onClick={() => setForm({...form, enabled: !form.enabled})}
-            className={`w-16 h-8 rounded-full transition-all relative ${form.enabled ? 'bg-green-500' : 'bg-slate-700'}`}
+            className={`relative w-16 h-8 rounded-full transition-all duration-300 ease-out ${form.enabled ? 'bg-gradient-to-r from-primary-500 to-primary-600 shadow-lg shadow-primary-500/30' : 'bg-slate-300 dark:bg-slate-600'}`}
           >
-            <div className={`absolute top-1 w-6 h-6 bg-white rounded-full shadow-lg transition-all ${form.enabled ? 'left-9' : 'left-1'}`} />
+            <span className={`absolute top-1 left-1 w-6 h-6 bg-white rounded-full shadow-lg transition-all duration-300 ease-out flex items-center justify-center ${form.enabled ? 'translate-x-7 shadow-primary-500/20' : 'translate-x-0'}`}>
+              {form.enabled && <span className="text-primary-500 text-xs font-bold">✓</span>}
+            </span>
           </button>
         </div>
 
@@ -171,7 +173,7 @@ export default function OffersManager() {
             </div>
 
             <div className="space-y-6 bg-white/5 p-6 rounded-3xl border border-white/5">
-               <h3 className="font-black text-green-500 flex items-center gap-2 uppercase tracking-widest text-sm">
+               <h3 className="font-black text-primary-500 flex items-center gap-2 uppercase tracking-widest text-sm">
                 <LinkIcon size={18} />
                 {rtl ? 'زر التوجيه' : 'Target Link'}
               </h3>
@@ -246,7 +248,7 @@ export default function OffersManager() {
           <button 
             onClick={handleSave} 
             disabled={loading || uploading} 
-            className="btn-primary flex items-center gap-3 px-12 h-16 rounded-[2rem] shadow-2xl shadow-primary-500/20 active:scale-95 transition-all"
+            className="flex items-center gap-2 px-5 py-2.5 rounded-xl font-black text-sm transition-all duration-300 bg-rose-500 text-white shadow-lg shadow-rose-500/20 hover:bg-rose-600 hover:scale-105 active:scale-95"
           >
             {loading ? <Loader2 size={24} className="animate-spin" /> : <Save size={24} />}
             <span className="text-xl font-black uppercase tracking-widest">

@@ -1,6 +1,8 @@
 import prisma from '../lib/prisma';
 import { cacheInvalidateScope, cacheResolveSWR } from '../services/cacheService';
 import { getQueryParam, getQueryInt } from '../utils/helpers';
+import { removeFile } from '../utils/fileUtils';
+import { logAudit } from '../services/auditService';
 export const getPages = async (req, res) => {
     try {
         const hasPagination = req.query.page !== undefined || req.query.limit !== undefined;
@@ -69,6 +71,10 @@ export const upsertPage = async (req, res) => {
     try {
         const input = req.body;
         const pageId = input.id || `PAGE-${Date.now()}`;
+        const existedBefore = Boolean(input.id && await prisma.store_pages.findUnique({
+            where: { id: String(input.id) },
+            select: { id: true }
+        }));
         let slug = input.slug || '';
         if (!slug) {
             slug = input.name_en.toLowerCase().trim().replace(/[^a-z0-9-]+/g, '-');
@@ -90,7 +96,8 @@ export const upsertPage = async (req, res) => {
                 banner_size: input.banner_size || 'medium',
                 spotlight_product_id: input.spotlight_product_id || null,
                 countdown_end_date: input.countdown_end_date ? new Date(input.countdown_end_date) : null,
-                show_search: input.show_search !== undefined ? !!input.show_search : false
+                show_search: input.show_search !== undefined ? !!input.show_search : false,
+                image_url: input.image_url || null
             },
             update: {
                 name_ar: input.name_ar,
@@ -106,11 +113,13 @@ export const upsertPage = async (req, res) => {
                 banner_size: input.banner_size || 'medium',
                 spotlight_product_id: input.spotlight_product_id || null,
                 countdown_end_date: input.countdown_end_date ? new Date(input.countdown_end_date) : null,
-                show_search: input.show_search !== undefined ? !!input.show_search : false
+                show_search: input.show_search !== undefined ? !!input.show_search : false,
+                image_url: input.image_url || null
             }
         });
         await cacheInvalidateScope('pages');
         await cacheInvalidateScope('pagesBySlug');
+        await logAudit(existedBefore ? 'update_page' : 'create_page', req.user?.username || 'system', `${existedBefore ? 'Updated' : 'Created'} page: ${pageId}`);
         res.json({ success: true, id: pageId });
     }
     catch (err) {
@@ -135,9 +144,17 @@ export const incrementPageView = async (req, res) => {
 export const deletePage = async (req, res) => {
     try {
         const { id } = req.params;
+        const page = await prisma.store_pages.findUnique({
+            where: { id: String(id) },
+            select: { banner_url: true }
+        });
+        if (page?.banner_url) {
+            removeFile(page.banner_url);
+        }
         await prisma.store_pages.delete({ where: { id: String(id) } });
         await cacheInvalidateScope('pages');
         await cacheInvalidateScope('pagesBySlug');
+        await logAudit('delete_page', req.user?.username || 'system', `Deleted page: ${String(id)}`);
         res.json({ success: true });
     }
     catch (err) {
@@ -157,6 +174,7 @@ export const reorderPages = async (req, res) => {
         })));
         await cacheInvalidateScope('pages');
         await cacheInvalidateScope('pagesBySlug');
+        await logAudit('reorder_pages', req.user?.username || 'system', `Reordered ${pages.length} pages`);
         res.json({ success: true });
     }
     catch (err) {

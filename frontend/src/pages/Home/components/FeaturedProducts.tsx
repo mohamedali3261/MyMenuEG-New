@@ -20,7 +20,7 @@ export default function FeaturedProducts() {
 
   useEffect(() => {
     api.get('/products')
-      .then((res: { data: FeaturedProduct[] }) => setProducts(res.data.slice(0, 4))) // Featured gets Top 4
+      .then((res: { data: FeaturedProduct[] }) => setProducts(res.data.filter((p: any) => !(p.bundle_items && p.bundle_items.length > 0)).slice(0, 4)))
       .catch(console.error);
   }, []);
 

@@ -114,7 +114,7 @@ export default function CategoriesList() {
               <label className="block text-sm font-medium mb-1">{rtl ? 'عنوان فرعي (إنجليزي)' : 'Subtitle (English)'}</label>
               <input value={newCat.subtitle_en} onChange={e => setNewCat({...newCat, subtitle_en: e.target.value})} type="text" dir="ltr" className="w-full bg-slate-100 dark:bg-[#111] border border-slate-300 dark:border-white/10 rounded-xl p-3 focus:outline-none focus:border-primary-500" placeholder="Best perfumes selection..." />
             </div>
-            <button onClick={handleCreate} disabled={adding} className="btn-primary w-full flex items-center justify-center gap-2 mt-4">
+            <button onClick={handleCreate} disabled={adding} className="flex items-center justify-center gap-2 px-5 py-2.5 rounded-xl font-black text-sm transition-all duration-300 bg-rose-500 text-white shadow-lg shadow-rose-500/20 hover:bg-rose-600 hover:scale-105 active:scale-95">
               {adding ? <Loader2 size={20} className="animate-spin" /> : <Plus size={20} />}
               {rtl ? 'حفظ للتصنيفات' : 'Save Category'}
             </button>
@@ -146,7 +146,7 @@ export default function CategoriesList() {
                     </div>
                  </div>
                  <div className="flex items-center gap-3">
-                   <span className="px-3 py-1 bg-green-500/10 text-green-500 rounded-full text-xs font-bold">
+                   <span className="px-3 py-1 bg-primary-500/10 text-primary-500 rounded-full text-xs font-bold">
                      {cat.status === 'active' ? (rtl ? 'نشط' : 'Active') : ''}
                    </span>
                     <button onClick={() => setDeleteModal({ isOpen: true, id: cat.id })} className="p-2 text-red-500 hover:bg-red-500/10 rounded-full transition">

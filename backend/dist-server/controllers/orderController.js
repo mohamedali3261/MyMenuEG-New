@@ -1,28 +1,104 @@
-import crypto from 'crypto';
 import prisma from '../lib/prisma';
 import { orderSchema } from '../utils/schemas';
 import { logger } from '../utils/logger';
 import { getQueryParam, getQueryInt, calculatePagination } from '../utils/helpers';
-import { sendOrderConfirmationEmail } from '../services/emailService';
+import { beginIdempotency, completeIdempotency, failIdempotency } from '../services/idempotencyService';
+import { enqueueOutboxJob } from '../services/outboxService';
+import { logAudit } from '../services/auditService';
 export const createOrder = async (req, res) => {
+    let idemRecordId = null;
+    const respond = async (statusCode, body) => {
+        if (idemRecordId) {
+            if (statusCode >= 200 && statusCode < 300) {
+                await completeIdempotency(idemRecordId, statusCode, body);
+            }
+            else {
+                await failIdempotency(idemRecordId, statusCode, body);
+            }
+        }
+        return res.status(statusCode).json(body);
+    };
     try {
+        const idem = await beginIdempotency('create_order', req, req.body);
+        if (idem.enabled && idem.replay) {
+            return res.status(idem.response.statusCode).json(idem.response.body);
+        }
+        idemRecordId = idem.enabled && !idem.replay ? idem.recordId : null;
         // 0. Validate Input
         const validated = orderSchema.parse(req.body);
-        const { customer, items, total_price, coupon_id, discount_amount } = validated;
-        const orderId = crypto.randomUUID();
+        const { customer, items, total_price, coupon_id } = validated;
+        const orderId = Math.floor(1000000000 + Math.random() * 9000000000).toString();
         await prisma.$transaction(async (tx) => {
+            const productIds = [...new Set(items.map((item) => String(item.id)))];
+            const dbProducts = await tx.products.findMany({
+                where: { id: { in: productIds } },
+                select: {
+                    id: true,
+                    name_ar: true,
+                    name_en: true,
+                    price: true,
+                    status: true
+                }
+            });
+            if (dbProducts.length !== productIds.length) {
+                throw { status: 400, message: 'One or more products are invalid' };
+            }
+            const productMap = new Map(dbProducts.map((p) => [p.id, p]));
+            let subtotal = 0;
+            const orderItemsData = items.map((item) => {
+                const product = productMap.get(String(item.id));
+                if (!product) {
+                    throw { status: 400, message: `Invalid product: ${String(item.id)}` };
+                }
+                if (product.status && product.status !== 'active') {
+                    throw { status: 400, message: `Product is not available: ${String(item.id)}` };
+                }
+                const unitPrice = Number(product.price ?? 0);
+                if (!Number.isFinite(unitPrice) || unitPrice < 0) {
+                    throw { status: 400, message: `Invalid product price: ${String(item.id)}` };
+                }
+                const quantity = Number(item.quantity ?? 0);
+                const lineSubtotal = unitPrice * quantity;
+                subtotal += lineSubtotal;
+                return {
+                    order_id: orderId,
+                    product_id: String(item.id),
+                    product_name: product.name_ar || product.name_en || item.name || 'Product',
+                    price: unitPrice,
+                    quantity,
+                    subtotal: lineSubtotal,
+                    custom_print_url: item.custom_file_url || null,
+                    custom_print_notes: item.custom_notes || null
+                };
+            });
+            let appliedDiscount = 0;
             if (coupon_id) {
                 const coupon = await tx.coupons.findUnique({ where: { id: coupon_id } });
                 if (!coupon || coupon.status !== 'active') {
                     throw { status: 400, message: 'Invalid or inactive coupon' };
                 }
+                const now = new Date();
+                if (coupon.start_date && coupon.start_date > now) {
+                    throw { status: 400, message: 'Coupon has not started yet' };
+                }
+                if (coupon.end_date && coupon.end_date < now) {
+                    throw { status: 400, message: 'Coupon has expired' };
+                }
                 if (coupon.usage_limit !== null &&
                     (coupon.used_count ?? 0) >= coupon.usage_limit) {
                     throw { status: 400, message: 'Coupon usage limit reached' };
                 }
-                if (coupon.min_order !== null && total_price < coupon.min_order) {
+                if (coupon.min_order !== null && subtotal < coupon.min_order) {
                     throw { status: 400, message: `Min order EGP ${coupon.min_order} required` };
                 }
+                const couponValue = Number(coupon.value ?? 0);
+                if ((coupon.type || 'fixed') === 'percent') {
+                    appliedDiscount = (subtotal * couponValue) / 100;
+                }
+                else {
+                    appliedDiscount = couponValue;
+                }
+                appliedDiscount = Math.max(0, Math.min(appliedDiscount, subtotal));
                 const updated = await tx.coupons.updateMany({
                     where: {
                         id: coupon_id,
@@ -38,71 +114,86 @@ export const createOrder = async (req, res) => {
                     throw { status: 400, message: 'Coupon is no longer available' };
                 }
             }
+            const finalTotal = Number((subtotal - appliedDiscount).toFixed(2));
+            const clientTotal = Number(total_price ?? 0);
+            if (Math.abs(clientTotal - finalTotal) > 0.01) {
+                throw {
+                    status: 400,
+                    message: 'Price mismatch detected. Please refresh your cart and try again.'
+                };
+            }
             // 1. Create order
             await tx.orders.create({
                 data: {
                     id: orderId,
+                    customer_id: req.customer?.id || null,
                     customer_name: customer.name || '',
                     phone: customer.phone || '',
+                    email: req.customer?.email || null,
                     governorate: customer.governorate || '',
                     city: customer.city || '',
                     address: customer.address || '',
                     notes: customer.notes || '',
-                    total_price,
+                    total_price: finalTotal,
                     status: 'pending',
                     coupon_id,
-                    discount_amount: discount_amount || 0
+                    discount_amount: Number(appliedDiscount.toFixed(2))
                 }
             });
             // 2. Create items
             await tx.order_items.createMany({
-                data: items.map((item) => ({
-                    order_id: orderId,
-                    product_id: item.id,
-                    product_name: item.name,
-                    price: item.price,
-                    quantity: item.quantity,
-                    subtotal: item.price * item.quantity
-                }))
+                data: orderItemsData
             });
         });
-        // Send confirmation email (async, don't wait)
+        // Outbox: order confirmation email (durable retries)
         if (customer.email) {
-            sendOrderConfirmationEmail(customer.email, orderId, customer.name || 'Customer', total_price, items.map((item) => ({
-                name: item.name,
-                quantity: item.quantity,
-                price: item.price
-            }))).catch(err => logger.error('Failed to send order confirmation email', err));
+            await enqueueOutboxJob('order.created.send_email', {
+                email: customer.email,
+                orderId,
+                customerName: customer.name || 'Customer',
+                totalPrice: total_price,
+                items: items.map((item) => ({
+                    name: item.name,
+                    quantity: item.quantity,
+                    price: item.price
+                }))
+            });
         }
-        // Notify admin via WebSocket
-        const { notifyNewOrder } = await import('../services/websocketService');
-        notifyNewOrder({
+        // Outbox: real-time notification for admins
+        await enqueueOutboxJob('order.created.notify_ws', {
             id: orderId,
             customer_name: customer.name,
             total_price,
             created_at: new Date().toISOString()
         });
-        res.json({ success: true, orderId });
+        return respond(200, { success: true, orderId });
     }
     catch (err) {
         if (err?.status && err?.message) {
-            return res.status(err.status).json({ error: err.message });
+            return respond(err.status, { error: err.message });
         }
         if (err.name === 'ZodError') {
-            return res.status(400).json({
+            return respond(400, {
                 error: 'Validation failed',
                 details: err.errors.map((e) => e.message)
             });
         }
         logger.error('Failed to create order', err);
-        res.status(500).json({ error: 'Failed to create order' });
+        return respond(500, { error: 'Failed to create order' });
     }
 };
 export const trackOrder = async (req, res) => {
     try {
         const { id } = req.params;
-        const order = await prisma.orders.findUnique({
-            where: { id: String(id) },
+        const phone = getQueryParam(req.query.phone);
+        if (!phone || !phone.trim()) {
+            return res.status(400).json({ message: 'Phone number is required' });
+        }
+        const order = await prisma.orders.findFirst({
+            where: {
+                id: String(id),
+                phone: phone.trim()
+            },
             select: {
                 id: true,
                 status: true,
@@ -218,6 +309,7 @@ export const updateOrderStatus = async (req, res) => {
                 }
             })
         ]);
+        await logAudit('update_order_status', req.user?.username || 'system', `Updated order ${id} status to ${status}`);
         res.json({ success: true });
     }
     catch (err) {
@@ -234,6 +326,7 @@ export const deleteOrder = async (req, res) => {
             return res.status(404).json({ error: 'Order not found' });
         }
         await prisma.orders.delete({ where: { id: String(id) } });
+        await logAudit('delete_order', req.user?.username || 'system', `Deleted order: ${String(id)}`);
         res.json({ success: true });
     }
     catch (err) {
@@ -242,5 +335,38 @@ export const deleteOrder = async (req, res) => {
             return res.status(404).json({ error: 'Order not found' });
         }
         res.status(500).json({ error: 'Failed to delete order' });
+    }
+};
+export const getMyOrders = async (req, res) => {
+    try {
+        const customerId = req.customer?.id;
+        if (!customerId) {
+            return res.status(401).json({ error: 'Not authenticated' });
+        }
+        const page = getQueryInt(req.query.page, 1, 1);
+        const limit = getQueryInt(req.query.limit, 20, 1, 100);
+        const skip = (page - 1) * limit;
+        const [orders, total] = await Promise.all([
+            prisma.orders.findMany({
+                where: { customer_id: customerId },
+                skip,
+                take: limit,
+                orderBy: { created_at: 'desc' },
+                include: { order_items: true }
+            }),
+            prisma.orders.count({ where: { customer_id: customerId } })
+        ]);
+        const formatted = orders.map(o => ({
+            ...o,
+            items: o.order_items
+        }));
+        res.json({
+            orders: formatted,
+            ...calculatePagination(total, page, limit)
+        });
+    }
+    catch (err) {
+        logger.error('Failed to fetch my orders', err);
+        res.status(500).json({ error: 'Failed to fetch orders' });
     }
 };

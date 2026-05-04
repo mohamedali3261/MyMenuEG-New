@@ -1,14 +1,13 @@
 import prisma from '../lib/prisma';
 import { logger } from '../utils/logger';
 import { getQueryParam, getQueryInt } from '../utils/helpers';
+import { logAudit } from '../services/auditService';
+import { sanitizeObject } from '../utils/sanitizer';
 // Validation
 const validateReview = (data) => {
     const errors = [];
     if (!data.product_id || data.product_id.trim().length < 5) {
         errors.push('Invalid product ID');
-    }
-    if (!data.user_name || data.user_name.trim().length < 2) {
-        errors.push('Name must be at least 2 characters');
     }
     if (!data.rating || data.rating < 1 || data.rating > 5) {
         errors.push('Rating must be between 1 and 5');
@@ -78,6 +77,8 @@ export const createReview = async (req, res) => {
         if (errors.length > 0) {
             return res.status(400).json({ error: 'Validation failed', details: errors });
         }
+        // Use customer name from auth token
+        const customerName = req.customer?.name || req.customer?.email?.split('@')[0] || 'User';
         // Check if product exists
         const product = await prisma.products.findUnique({
             where: { id: input.product_id }
@@ -85,16 +86,26 @@ export const createReview = async (req, res) => {
         if (!product) {
             return res.status(404).json({ error: 'Product not found' });
         }
+        // Check if customer already reviewed this product
+        if (req.customer?.id) {
+            const existing = await prisma.product_reviews.findFirst({
+                where: { product_id: input.product_id, customer_id: req.customer.id }
+            });
+            if (existing) {
+                return res.status(409).json({ error: 'You have already reviewed this product' });
+            }
+        }
         // Create review (pending approval)
         const review = await prisma.product_reviews.create({
-            data: {
+            data: sanitizeObject({
                 product_id: input.product_id,
-                user_name: input.user_name.trim().slice(0, 100),
+                customer_id: req.customer?.id || null,
+                user_name: customerName.trim().slice(0, 100),
                 rating: input.rating,
                 comment_ar: input.comment_ar?.trim() || null,
                 comment_en: input.comment_en?.trim() || null,
                 status: 'pending'
-            }
+            })
         });
         logger.info(`New review created for product ${input.product_id}`);
         res.json({
@@ -164,6 +175,7 @@ export const updateReviewStatus = async (req, res) => {
             where: { id: parseInt(id) },
             data: { status }
         });
+        await logAudit('update_review_status', req.user?.username || 'system', `Updated review ${id} status to ${status}`);
         logger.info(`Review ${id} status updated to ${status}`);
         res.json({ success: true });
     }
@@ -178,6 +190,7 @@ export const deleteReview = async (req, res) => {
         await prisma.product_reviews.delete({
             where: { id: parseInt(id) }
         });
+        await logAudit('delete_review', req.user?.username || 'system', `Deleted review: ${id}`);
         logger.info(`Review ${id} deleted`);
         res.json({ success: true });
     }

@@ -12,12 +12,15 @@ interface NotificationItem {
   message_ar: string;
   message_en: string;
   created_at: string;
+  source?: 'order' | 'customer';
 }
 
 export default function NotificationsDrawer({ isOpen, onClose }: { isOpen: boolean, onClose: () => void }) {
   const { rtl, notifications } = useStore();
 
-  const getIcon = (type: string, message: string) => {
+  const getIcon = (notif: NotificationItem) => {
+    if (notif.source === 'customer') return <Bell className="text-primary-500" size={18} />;
+    const message = notif.message_en || '';
     if (message.includes('Processing') || message.includes('تجهيز')) return <Package className="text-blue-500" size={18} />;
     if (message.includes('Shipped') || message.includes('شحن')) return <Truck className="text-accent-500" size={18} />;
     if (message.includes('Delivered') || message.includes('تسليم')) return <CheckCircle2 className="text-primary-500" size={18} />;
@@ -67,8 +70,8 @@ export default function NotificationsDrawer({ isOpen, onClose }: { isOpen: boole
                 </div>
               ) : (
                 notifications.map((notif: NotificationItem) => (
-                  <Link 
-                    to="/track"
+                  <Link
+                    to={notif.source === 'customer' ? '/my-orders' : '/track'}
                     onClick={onClose}
                     key={notif.id} 
                     className={`block p-4 rounded-2xl border transition-all ${
@@ -79,7 +82,7 @@ export default function NotificationsDrawer({ isOpen, onClose }: { isOpen: boole
                   >
                     <div className="flex gap-4">
                       <div className="w-10 h-10 rounded-full bg-white dark:bg-black/50 shadow-sm flex items-center justify-center shrink-0 border border-slate-100 dark:border-white/5">
-                        {getIcon(notif.type, notif.message_en)}
+                        {getIcon(notif)}
                       </div>
                       <div>
                         <h4 className={`text-sm font-bold ${notif.is_read ? 'text-slate-600 dark:text-slate-400' : 'text-primary-600 dark:text-primary-400'}`}>

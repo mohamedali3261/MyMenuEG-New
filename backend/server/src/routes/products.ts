@@ -1,13 +1,14 @@
 import { Router } from 'express';
 import { getProducts, getProductById, upsertProduct, deleteProduct, updateProductStatus } from '../controllers/productController';
 import { authenticateToken } from '../middleware/auth';
+import { hasPermission } from '../middleware/permissions';
 
 const router = Router();
 
 router.get('/', getProducts);
 router.get('/:id', getProductById);
-router.patch('/:id/status', authenticateToken, updateProductStatus);
-router.post('/', authenticateToken, upsertProduct);
-router.delete('/:id', authenticateToken, deleteProduct);
+router.patch('/:id/status', authenticateToken, hasPermission('products:write'), updateProductStatus);
+router.post('/', authenticateToken, hasPermission('products:write'), upsertProduct);
+router.delete('/:id', authenticateToken, hasPermission('products:delete'), deleteProduct);
 
 export default router;

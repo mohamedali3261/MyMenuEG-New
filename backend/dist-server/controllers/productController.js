@@ -38,40 +38,65 @@ export const getProducts = async (req, res) => {
                     where,
                     skip,
                     take: limit,
-                    orderBy: { id: 'desc' },
-                    include: {
-                        product_specs: true,
-                        product_images: true,
-                        product_quantity_prices: true,
-                        product_variants: true,
-                        product_detail_items: {
-                            orderBy: { order_index: 'asc' }
-                        },
-                        product_faqs: {
-                            orderBy: { order_index: 'asc' }
-                        },
-                        fbt_main: {
-                            include: {
-                                related_product: true
+                    orderBy: { created_at: 'desc' },
+                    select: {
+                        id: true,
+                        name_ar: true,
+                        name_en: true,
+                        price: true,
+                        old_price: true,
+                        image_url: true,
+                        category_id: true,
+                        status: true,
+                        stock: true,
+                        is_best_seller: true,
+                        categories: {
+                            select: {
+                                name_ar: true,
+                                name_en: true
                             }
                         },
-                        categories: true
+                        product_variants: {
+                            take: 1, // Only need first variant for fallback image
+                            include: {
+                                product_variant_images: true
+                            }
+                        }
                     }
                 }),
                 prisma.products.count({ where })
             ]);
-            const fullProducts = products.map((p) => ({
-                ...p,
-                cat_name_ar: p.categories?.name_ar,
-                cat_name_en: p.categories?.name_en,
-                specs: p.product_specs,
-                images: p.product_images.map((img) => img.url || ''),
-                quantity_prices: p.product_quantity_prices,
-                variants: p.product_variants,
-                detail_items: p.product_detail_items,
-                faqs: p.product_faqs,
-                fbt_products: p.fbt_main?.map((fbt) => fbt.related_product).filter(Boolean) || []
-            }));
+            const fullProducts = products.map((p) => {
+                const variants = p.product_variants.map((v) => ({
+                    ...v,
+                    images: v.product_variant_images?.map((img) => img.url) || []
+                }));
+                // Image Fallback Logic
+                let finalImageUrl = p.image_url;
+                if (!finalImageUrl && variants.length > 0) {
+                    const firstVariantWithImages = variants.find((v) => v.images && v.images.length > 0);
+                    if (firstVariantWithImages) {
+                        finalImageUrl = firstVariantWithImages.images[0];
+                    }
+                    else if (variants[0].image_url) {
+                        finalImageUrl = variants[0].image_url;
+                    }
+                }
+                return {
+                    id: p.id,
+                    name_ar: p.name_ar,
+                    name_en: p.name_en,
+                    price: p.price,
+                    old_price: p.old_price,
+                    image_url: finalImageUrl,
+                    status: p.status,
+                    stock: p.stock,
+                    is_best_seller: p.is_best_seller,
+                    category_id: p.category_id,
+                    cat_name_ar: p.categories?.name_ar,
+                    cat_name_en: p.categories?.name_en
+                };
+            });
             return JSON.stringify({
                 products: fullProducts,
                 total,
@@ -97,7 +122,11 @@ export const getProductById = async (req, res) => {
                     product_specs: true,
                     product_images: true,
                     product_quantity_prices: true,
-                    product_variants: true,
+                    product_variants: {
+                        include: {
+                            product_variant_images: true
+                        }
+                    },
                     product_detail_items: {
                         orderBy: { order_index: 'asc' }
                     },
@@ -109,23 +138,50 @@ export const getProductById = async (req, res) => {
                             related_product: true
                         }
                     },
+                    bundle_parent: {
+                        include: {
+                            linked_product: true
+                        }
+                    },
                     categories: true
                 }
             });
             if (!product) {
                 throw new Error('PRODUCT_NOT_FOUND');
             }
+            const variants = product.product_variants.map((v) => ({
+                ...v,
+                images: v.product_variant_images.map((img) => img.url)
+            }));
+            // Image Fallback Logic
+            let finalImageUrl = product.image_url;
+            if (!finalImageUrl && variants.length > 0) {
+                const firstVariantWithImages = variants.find((v) => v.images && v.images.length > 0);
+                if (firstVariantWithImages) {
+                    finalImageUrl = firstVariantWithImages.images[0];
+                }
+                else if (variants[0].image_url) {
+                    finalImageUrl = variants[0].image_url;
+                }
+            }
             const formatted = {
                 ...product,
+                image_url: finalImageUrl,
                 cat_name_ar: product.categories?.name_ar,
                 cat_name_en: product.categories?.name_en,
                 specs: product.product_specs,
                 images: product.product_images.map((img) => img.url || ''),
                 quantity_prices: product.product_quantity_prices,
-                variants: product.product_variants,
+                variants,
                 detail_items: product.product_detail_items,
                 faqs: product.product_faqs,
-                fbt_products: product.fbt_main?.map((fbt) => fbt.related_product).filter(Boolean) || []
+                fbt_products: product.fbt_main?.map((fbt) => fbt.related_product).filter(Boolean) || [],
+                bundle_items: product.bundle_parent?.map((b) => ({
+                    product_id: b.product_id,
+                    quantity: b.quantity,
+                    discount: b.discount || 0,
+                    product: b.linked_product
+                })) || []
             };
             return JSON.stringify(formatted);
         }, 120, 600);
@@ -144,6 +200,10 @@ export const upsertProduct = async (req, res) => {
         const input = productSchema.parse(req.body);
         const productId = input.id || `prod-${Date.now()}`;
         const primaryImage = input.images && input.images.length > 0 ? input.images[0] : '';
+        const existedBefore = Boolean(input.id && await prisma.products.findUnique({
+            where: { id: String(input.id) },
+            select: { id: true }
+        }));
         // Simplified upsert using Prisma transaction to handle relations
         await prisma.$transaction(async (tx) => {
             // 1. Delete relations
@@ -154,6 +214,7 @@ export const upsertProduct = async (req, res) => {
             await tx.product_detail_items.deleteMany({ where: { product_id: productId } });
             await tx.product_faqs.deleteMany({ where: { product_id: productId } });
             await tx.product_fbt.deleteMany({ where: { product_id: productId } });
+            await tx.product_bundle_items.deleteMany({ where: { bundle_id: productId } });
             // 2. Upsert base product
             await tx.products.upsert({
                 where: { id: productId },
@@ -252,24 +313,38 @@ export const upsertProduct = async (req, res) => {
                 });
             }
             if (input.variants && Array.isArray(input.variants)) {
-                await tx.product_variants.createMany({
-                    data: input.variants.map((variant) => ({
-                        product_id: productId,
-                        label_ar: variant.label_ar || '',
-                        label_en: variant.label_en || '',
-                        sku: variant.sku || '',
-                        price: variant.price,
-                        old_price: variant.old_price || 0,
-                        stock: variant.stock || 0,
-                        is_default: !!variant.is_default,
-                        image_url: variant.image_url || '',
-                        option_group: variant.option_group || '',
-                        color_value: variant.color_value || '',
-                        size_value: variant.size_value || '',
-                        swatch_value: variant.swatch_value || '',
-                        sort_order: variant.sort_order || 0
-                    }))
-                });
+                for (const variant of input.variants) {
+                    const createdVariant = await tx.product_variants.create({
+                        data: {
+                            product_id: productId,
+                            label_ar: variant.label_ar || '',
+                            label_en: variant.label_en || '',
+                            sku: variant.sku || '',
+                            price: variant.price,
+                            old_price: variant.old_price || 0,
+                            stock: variant.stock || 0,
+                            is_default: !!variant.is_default,
+                            image_url: variant.image_url || (variant.images && variant.images.length > 0 ? variant.images[0] : ''),
+                            option_group: variant.option_group || '',
+                            color_value: variant.color_value || '',
+                            size_value: variant.size_value || '',
+                            color_ar: variant.color_ar || '',
+                            color_en: variant.color_en || '',
+                            size_ar: variant.size_ar || '',
+                            size_en: variant.size_en || '',
+                            swatch_value: variant.swatch_value || '',
+                            sort_order: variant.sort_order || 0
+                        }
+                    });
+                    if (variant.images && Array.isArray(variant.images)) {
+                        await tx.product_variant_images.createMany({
+                            data: variant.images.map((img) => ({
+                                variant_id: createdVariant.id,
+                                url: img
+                            }))
+                        });
+                    }
+                }
             }
             if (input.detail_items && Array.isArray(input.detail_items)) {
                 await tx.product_detail_items.createMany({
@@ -303,19 +378,31 @@ export const upsertProduct = async (req, res) => {
                     }))
                 });
             }
+            if (input.bundle_items && Array.isArray(input.bundle_items)) {
+                await tx.product_bundle_items.createMany({
+                    data: input.bundle_items.map((item) => ({
+                        bundle_id: productId,
+                        product_id: item.product_id,
+                        quantity: item.quantity || 1,
+                        discount: item.discount || 0
+                    }))
+                });
+            }
         });
         await cacheInvalidateScope('productsList');
         await cacheInvalidateScope('productById');
         await cacheInvalidateScope('categories');
         await cacheInvalidateScope('pages');
         await cacheInvalidateScope('pagesBySlug');
+        await logAudit(existedBefore ? 'update_product' : 'create_product', req.user?.username || 'system', `${existedBefore ? 'Updated' : 'Created'} product: ${productId}`);
         res.json({ success: true, id: productId });
     }
     catch (err) {
         if (err.name === 'ZodError') {
+            const errors = err.errors || err.issues || [];
             return res.status(400).json({
                 error: 'Validation failed',
-                details: err.errors.map((e) => e.message)
+                details: Array.isArray(errors) ? errors.map((e) => e.message) : ['Validation Error']
             });
         }
         console.error(err);
@@ -339,6 +426,8 @@ export const deleteProduct = async (req, res) => {
             product.product_variants.forEach((v) => removeFile(v.image_url));
         }
         // 2. Delete from DB (relations cascade)
+        await prisma.customer_wishlists.deleteMany({ where: { product_id: String(id) } });
+        await prisma.customer_carts.deleteMany({ where: { product_id: String(id) } });
         await prisma.products.delete({ where: { id: String(id) } });
         await cacheInvalidateScope('productsList');
         await cacheInvalidateScope('productById');

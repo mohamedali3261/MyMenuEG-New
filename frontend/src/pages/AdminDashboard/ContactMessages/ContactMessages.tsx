@@ -1,6 +1,6 @@
 import { useState, useEffect } from 'react';
 import { useStore } from '../../../store/store';
-import { Mail, Clock, Check, X, Archive, RefreshCw } from 'lucide-react';
+import { Mail, Clock, Check, X, Archive, RefreshCw, Paperclip, FileText } from 'lucide-react';
 import { toast } from 'react-hot-toast';
 import { api } from '../../../api';
 
@@ -11,6 +11,8 @@ interface ContactMessage {
   phone: string;
   subject: string;
   message: string;
+  custom_file_url?: string;
+  custom_notes?: string;
   status: 'new' | 'read' | 'replied' | 'archived';
   created_at: string;
 }
@@ -18,7 +20,7 @@ interface ContactMessage {
 const statusColors = {
   new: 'bg-blue-500/10 text-blue-500 border-blue-500/20',
   read: 'bg-yellow-500/10 text-yellow-500 border-yellow-500/20',
-  replied: 'bg-green-500/10 text-green-500 border-green-500/20',
+  replied: 'bg-primary-500/10 text-primary-500 border-primary-500/20',
   archived: 'bg-slate-500/10 text-slate-500 border-slate-500/20'
 };
 
@@ -30,7 +32,7 @@ const statusLabels = {
 };
 
 export default function ContactMessages() {
-  const { rtl } = useStore();
+  const { rtl, refreshSidebarBadges } = useStore();
   const [messages, setMessages] = useState<ContactMessage[]>([]);
   const [loading, setLoading] = useState(true);
   const [filter, setFilter] = useState<string>('all');
@@ -54,6 +56,7 @@ export default function ContactMessages() {
     try {
       await api.patch(`/contact/${id}/status`, { status });
       setMessages(prev => prev.map(m => m.id === id ? { ...m, status: status as any } : m));
+      refreshSidebarBadges();
       toast.success(rtl ? 'تم تحديث الحالة' : 'Status updated');
     } catch (err) {
       toast.error(rtl ? 'فشل في تحديث الحالة' : 'Failed to update status');
@@ -149,6 +152,25 @@ export default function ContactMessages() {
                 <p className="text-slate-600 dark:text-slate-400">{msg.message}</p>
               </div>
 
+              {/* Custom Design Attachment */}
+              {(msg.custom_file_url || msg.custom_notes) && (
+                <div className="bg-indigo-50 dark:bg-indigo-500/5 border border-indigo-200 dark:border-indigo-500/10 p-3 rounded-xl space-y-2">
+                  <div className="flex items-center gap-2 text-indigo-600 dark:text-indigo-400">
+                    <Paperclip size={14} />
+                    <span className="text-xs font-bold uppercase tracking-widest">{rtl ? 'تصميم مخصص' : 'Custom Design'}</span>
+                  </div>
+                  {msg.custom_file_url && (
+                    <a href={msg.custom_file_url} target="_blank" rel="noopener noreferrer" className="flex items-center gap-2 text-sm font-bold text-indigo-500 hover:text-indigo-700 transition-colors">
+                      <FileText size={14} />
+                      {rtl ? 'عرض الملف المرفق' : 'View Attached File'}
+                    </a>
+                  )}
+                  {msg.custom_notes && (
+                    <p className="text-xs text-indigo-700/70 dark:text-indigo-300/70 font-medium">{msg.custom_notes}</p>
+                  )}
+                </div>
+              )}
+
               <div className="flex items-center justify-between pt-4 border-t border-slate-100 dark:border-white/5">
                 <div className="flex items-center gap-2 text-sm text-slate-500">
                   <Clock size={14} />
@@ -173,7 +195,7 @@ export default function ContactMessages() {
                   {(msg.status === 'new' || msg.status === 'read') && (
                     <button
                       onClick={() => updateStatus(msg.id, 'replied')}
-                      className="p-2 rounded-lg bg-green-500/10 text-green-500 hover:bg-green-500/20 transition-colors"
+                      className="p-2 rounded-lg bg-primary-500/10 text-primary-500 hover:bg-primary-500/20 transition-colors"
                       title={rtl ? 'تم الرد' : 'Mark as Replied'}
                     >
                       <Mail size={16} />

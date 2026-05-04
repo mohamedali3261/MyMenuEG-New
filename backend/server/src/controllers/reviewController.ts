@@ -2,10 +2,12 @@ import { Request, Response } from 'express';
 import prisma from '../lib/prisma';
 import { logger } from '../utils/logger';
 import { getQueryParam, getQueryInt } from '../utils/helpers';
+import { CustomerAuthRequest } from '../middleware/auth';
+import { logAudit } from '../services/auditService';
+import { sanitizeObject } from '../utils/sanitizer';
 
 interface ReviewInput {
   product_id: string;
-  user_name: string;
   rating: number;
   comment_ar?: string;
   comment_en?: string;
@@ -17,10 +19,6 @@ const validateReview = (data: ReviewInput): string[] => {
 
   if (!data.product_id || data.product_id.trim().length < 5) {
     errors.push('Invalid product ID');
-  }
-
-  if (!data.user_name || data.user_name.trim().length < 2) {
-    errors.push('Name must be at least 2 characters');
   }
 
   if (!data.rating || data.rating < 1 || data.rating > 5) {
@@ -51,7 +49,7 @@ export const getProductReviews = async (req: Request, res: Response) => {
     const skip = (page - 1) * limit;
 
     const [reviews, total] = await Promise.all([
-      (prisma as any).product_reviews.findMany({
+      prisma.product_reviews.findMany({
         where: {
           product_id: productId,
           status: 'approved'
@@ -60,7 +58,7 @@ export const getProductReviews = async (req: Request, res: Response) => {
         take: limit,
         orderBy: { created_at: 'desc' }
       }),
-      (prisma as any).product_reviews.count({
+      prisma.product_reviews.count({
         where: {
           product_id: productId,
           status: 'approved'
@@ -69,7 +67,7 @@ export const getProductReviews = async (req: Request, res: Response) => {
     ]);
 
     // Calculate average rating
-    const avgRating = await (prisma as any).product_reviews.aggregate({
+    const avgRating = await prisma.product_reviews.aggregate({
       where: {
         product_id: productId,
         status: 'approved'
@@ -92,7 +90,7 @@ export const getProductReviews = async (req: Request, res: Response) => {
   }
 };
 
-export const createReview = async (req: Request, res: Response) => {
+export const createReview = async (req: CustomerAuthRequest, res: Response) => {
   try {
     const input: ReviewInput = req.body;
 
@@ -101,6 +99,9 @@ export const createReview = async (req: Request, res: Response) => {
     if (errors.length > 0) {
       return res.status(400).json({ error: 'Validation failed', details: errors });
     }
+
+    // Use customer name from auth token
+    const customerName = req.customer?.name || req.customer?.email?.split('@')[0] || 'User';
 
     // Check if product exists
     const product = await prisma.products.findUnique({
@@ -111,16 +112,27 @@ export const createReview = async (req: Request, res: Response) => {
       return res.status(404).json({ error: 'Product not found' });
     }
 
+    // Check if customer already reviewed this product
+    if (req.customer?.id) {
+      const existing = await prisma.product_reviews.findFirst({
+        where: { product_id: input.product_id, customer_id: req.customer.id }
+      });
+      if (existing) {
+        return res.status(409).json({ error: 'You have already reviewed this product' });
+      }
+    }
+
     // Create review (pending approval)
-    const review = await (prisma as any).product_reviews.create({
-      data: {
+    const review = await prisma.product_reviews.create({
+      data: sanitizeObject({
         product_id: input.product_id,
-        user_name: input.user_name.trim().slice(0, 100),
+        customer_id: req.customer?.id || null,
+        user_name: customerName.trim().slice(0, 100),
         rating: input.rating,
         comment_ar: input.comment_ar?.trim() || null,
         comment_en: input.comment_en?.trim() || null,
         status: 'pending'
-      }
+      })
     });
 
     logger.info(`New review created for product ${input.product_id}`);
@@ -149,7 +161,7 @@ export const getAllReviews = async (req: Request, res: Response) => {
     }
 
     const [reviews, total] = await Promise.all([
-      (prisma as any).product_reviews.findMany({
+      prisma.product_reviews.findMany({
         where,
         skip,
         take: limit,
@@ -163,7 +175,7 @@ export const getAllReviews = async (req: Request, res: Response) => {
           }
         }
       }),
-      (prisma as any).product_reviews.count({ where })
+      prisma.product_reviews.count({ where })
     ]);
 
     res.json({
@@ -187,7 +199,7 @@ export const updateReviewStatus = async (req: Request, res: Response) => {
       return res.status(400).json({ error: 'Invalid status' });
     }
 
-    const review = await (prisma as any).product_reviews.findUnique({
+    const review = await prisma.product_reviews.findUnique({
       where: { id: parseInt(id) }
     });
 
@@ -195,11 +207,16 @@ export const updateReviewStatus = async (req: Request, res: Response) => {
       return res.status(404).json({ error: 'Review not found' });
     }
 
-    await (prisma as any).product_reviews.update({
+    await prisma.product_reviews.update({
       where: { id: parseInt(id) },
       data: { status }
     });
 
+    await logAudit(
+      'update_review_status',
+      (req as any).user?.username || 'system',
+      `Updated review ${id} status to ${status}`
+    );
     logger.info(`Review ${id} status updated to ${status}`);
 
     res.json({ success: true });
@@ -213,10 +230,11 @@ export const deleteReview = async (req: Request, res: Response) => {
   try {
     const id = getQueryParam(req.params.id) || '';
     
-    await (prisma as any).product_reviews.delete({
+    await prisma.product_reviews.delete({
       where: { id: parseInt(id) }
     });
 
+    await logAudit('delete_review', (req as any).user?.username || 'system', `Deleted review: ${id}`);
     logger.info(`Review ${id} deleted`);
 
     res.json({ success: true });

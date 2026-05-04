@@ -193,7 +193,7 @@ export default function OrdersList() {
                 <span className="text-xs text-slate-400 block mb-1">{rtl ? 'الإجمالي النهائي' : 'Final Total'}</span>
                 <span className="text-2xl font-extrabold text-primary-500">EGP {order.total_price?.toFixed(2)}</span>
                 {(order.discount_amount ?? 0) > 0 && (
-                  <div className="flex items-center gap-1 text-[10px] text-green-500 font-bold justify-end mt-1">
+                  <div className="flex items-center gap-1 text-[10px] text-primary-500 font-bold justify-end mt-1">
                     <Ticket size={10} />
                     <span>{rtl ? `خصم: ${order.discount_amount ?? 0} جنيه` : `Saved: ${order.discount_amount ?? 0} EGP`}</span>
                   </div>
@@ -232,7 +232,8 @@ export default function OrdersList() {
       {/* Items Modal */}
       <AnimatePresence>
         {selectedOrderItems && (
-          <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/50 backdrop-blur-sm" onClick={() => setSelectedOrderItems(null)}>
+          <div className="fixed inset-0 z-50 flex items-start justify-center pt-20 pb-6 px-4 overflow-y-auto" onClick={() => setSelectedOrderItems(null)}>
+            <div className="fixed inset-0 bg-black/50 backdrop-blur-sm" />
             <motion.div 
               initial={{ opacity: 0, scale: 0.9, y: 20 }}
               animate={{ opacity: 1, scale: 1, y: 0 }}

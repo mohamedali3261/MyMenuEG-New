@@ -1,7 +1,8 @@
 import { useState, useEffect } from 'react';
 import { useStore } from '../../../../store/store';
-import { Clock, Save, Loader2, Play } from 'lucide-react';
+import { Clock, Play } from 'lucide-react';
 import { api } from '../../../../api';
+import SaveButton from '../../../../components/SaveButton';
 
 export default function SliderSettingsPanel() {
   const { rtl, showToast } = useStore();
@@ -59,13 +60,13 @@ export default function SliderSettingsPanel() {
             />
             <span className="font-bold text-slate-400">{rtl ? 'ثانية' : 'sec'}</span>
             
-            <button 
+            <SaveButton
               onClick={handleSave}
-              disabled={loading}
-              className="bg-primary-500 hover:bg-primary-600 text-white p-3 rounded-xl shadow-lg shadow-primary-500/20 transition-all disabled:opacity-50"
-            >
-               {loading ? <Loader2 size={24} className="animate-spin" /> : <Save size={24} />}
-            </button>
+              isSaving={loading}
+              rtl={rtl}
+              color="glass"
+              checkHasChanges={false}
+            />
          </div>
       </div>
     </div>

@@ -61,7 +61,7 @@ export default function AdminLayout() {
         )}
       </AnimatePresence>
 
-      <main className="flex-grow p-4 lg:p-10 min-h-[calc(100vh-10rem)] lg:min-h-[calc(100vh-8rem)]">
+      <main className="flex-grow min-w-0 p-4 lg:p-10 min-h-[calc(100vh-10rem)] lg:min-h-[calc(100vh-8rem)] overflow-x-hidden">
         <Outlet />
       </main>
       </div>

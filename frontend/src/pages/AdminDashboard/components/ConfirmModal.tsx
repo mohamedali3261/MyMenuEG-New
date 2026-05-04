@@ -39,7 +39,7 @@ export default function ConfirmModal({
   const modalContent = (
     <AnimatePresence>
       {isOpen && (
-        <div className="fixed inset-0 z-[9999] flex items-center justify-center p-4 overflow-y-auto outline-none">
+        <div className="fixed inset-0 z-[9999] flex items-start justify-center pt-20 pb-6 px-4 overflow-y-auto outline-none">
           {/* Backdrop */}
           <motion.div 
             initial={{ opacity: 0 }}

@@ -1,4 +1,4 @@
-import { ArrowRight, Save as SaveIcon } from 'lucide-react';
+import { ArrowRight, Save as SaveIcon, Loader2 } from 'lucide-react';
 import { motion, AnimatePresence } from 'framer-motion';
 import { useProductFormState } from './hooks/useProductFormState';
 import { Sidebar } from './components/Sidebar';
@@ -174,30 +174,16 @@ export default function ProductForm() {
             <button
               onClick={saveProduct}
               disabled={loading}
-              className="group relative flex items-center gap-4 bg-primary-500 hover:bg-primary-600 text-white px-10 py-5 rounded-[2rem] font-black text-sm transition-all shadow-2xl shadow-primary-500/20 active:scale-95 disabled:opacity-50"
+              className="flex items-center gap-2 px-5 py-2.5 rounded-xl font-black text-sm transition-all duration-300 bg-rose-500 text-white shadow-lg shadow-rose-500/20 hover:bg-rose-600 hover:scale-105 active:scale-95 disabled:opacity-50"
             >
-              <div className="absolute inset-0 bg-white/10 opacity-0 group-hover:opacity-100 transition-opacity rounded-[2rem]" />
-              {loading ? (
-                <div className="flex items-center gap-3">
-                  <div className="w-5 h-5 border-4 border-white/30 border-t-white rounded-full animate-spin" />
-                  <span>{rtl ? 'جاري الحفظ...' : 'Saving Product...'}</span>
-                </div>
-              ) : (
-                <>
-                  <div className="p-2 bg-white/20 rounded-xl group-hover:rotate-12 transition-transform">
-                    <SaveIcon size={20} />
-                  </div>
-                  <span className="tracking-widest uppercase">
-                    {productType === 'simple' 
-                      ? (rtl ? 'حفظ المنتج العادي' : 'Save Simple Product')
-                      : productType === 'custom'
-                        ? (rtl ? 'حفظ منتج التخصيص' : 'Save Custom Product')
-                        : productType === 'bundle'
-                          ? (rtl ? 'حفظ الباقة' : 'Save Bundle')
-                          : (rtl ? 'حفظ النسخ المتعددة' : 'Save Product with Variations')}
-                  </span>
-                </>
-              )}
+              {loading ? <Loader2 size={20} className="animate-spin" /> : <SaveIcon size={20} />}
+              {productType === 'simple'
+                ? (rtl ? 'حفظ المنتج العادي' : 'Save Simple Product')
+                : productType === 'custom'
+                  ? (rtl ? 'حفظ منتج التخصيص' : 'Save Custom Product')
+                  : productType === 'bundle'
+                    ? (rtl ? 'حفظ الباقة' : 'Save Bundle')
+                    : (rtl ? 'حفظ النسخ المتعددة' : 'Save Product with Variations')}
             </button>
           </motion.div>
         </main>

@@ -1,5 +1,7 @@
 import prisma from '../lib/prisma';
 import { cacheInvalidateScope, cacheResolveSWR } from '../services/cacheService';
+import { removeFile } from '../utils/fileUtils';
+import { logAudit } from '../services/auditService';
 export const getSettings = async (req, res) => {
     try {
         const payload = await cacheResolveSWR('settings', 'all', async () => {
@@ -11,6 +13,8 @@ export const getSettings = async (req, res) => {
             // Defaults (consistent with PHP)
             const defaults = {
                 cardStyle: 'floating',
+                cardHoverAnimation: 'zoom',
+                bundleCardStyle: 'A',
                 backgroundStyle: 'blobs',
                 sliderInterval: '3',
                 promo_enabled: 'false',
@@ -21,6 +25,7 @@ export const getSettings = async (req, res) => {
                 light_bg_color: '#e2e8f0',
                 store_name: 'MyMenuEG',
                 logo_url: '',
+                navbar_style: 'variant1',
                 contact_settings: JSON.stringify({
                     heroTitleAr: "تواصل معنا - نحن هنا لمساعدتك",
                     heroTitleEn: "Contact Us - We're Here to Help",
@@ -85,9 +90,37 @@ export const getSettings = async (req, res) => {
                     paymobIntegrationId: '',
                     fawryMerchantCode: '',
                     fawrySecurityKey: ''
-                })
+                }),
+                shipping_settings: JSON.stringify({
+                    freeShippingEnabled: true,
+                    freeShippingMinOrder: 0,
+                    flatRateShipping: 0,
+                    governorateRates: {}
+                }),
+                google_login_enabled: 'false',
+                google_client_id: '',
+                hideEmptySlider: 'false'
             };
             const finalSettings = { ...defaults, ...settings };
+            // SECURITY: Strip secrets for non-admin requests or by default
+            const secrets = [
+                'paymobApiKey', 'paymobIntegrationId', 'paymob_api_key', 'paymob_integration_id',
+                'fawryMerchantCode', 'fawrySecurityKey', 'fawry_merchant_code', 'fawry_security_key',
+                'github_token', 'githubToken',
+                'smtp_password', 'smtp_user', 'mail_password'
+            ];
+            // We also need to look inside JSON strings
+            if (finalSettings.payment_settings) {
+                try {
+                    const pay = JSON.parse(finalSettings.payment_settings);
+                    secrets.forEach(s => delete pay[s]);
+                    finalSettings.payment_settings = JSON.stringify(pay);
+                }
+                catch (error) {
+                    console.warn('Failed to sanitize payment_settings JSON', error);
+                }
+            }
+            secrets.forEach(s => delete finalSettings[s]);
             return JSON.stringify(finalSettings);
         }, 180, 900);
         res.json(JSON.parse(payload));
@@ -100,6 +133,33 @@ export const getSettings = async (req, res) => {
 export const updateSettings = async (req, res) => {
     try {
         const input = req.body;
+        // Keys that contain image URLs (direct or inside JSON)
+        const IMAGE_KEYS = ['logo_url'];
+        const JSON_IMAGE_KEYS = ['popup_settings', 'loading_screen_settings'];
+        // Remove old images when they change
+        for (const key of IMAGE_KEYS) {
+            if (input[key] !== undefined) {
+                const old = await prisma.settings.findUnique({ where: { key_name: key } });
+                if (old?.value && old.value !== String(input[key]) && old.value.startsWith('/uploads/')) {
+                    removeFile(old.value);
+                }
+            }
+        }
+        for (const key of JSON_IMAGE_KEYS) {
+            if (input[key] !== undefined) {
+                const old = await prisma.settings.findUnique({ where: { key_name: key } });
+                if (old?.value) {
+                    try {
+                        const oldData = JSON.parse(old.value);
+                        const newData = JSON.parse(String(input[key]));
+                        if (oldData.imageUrl && oldData.imageUrl !== newData.imageUrl && oldData.imageUrl.startsWith('/uploads/')) {
+                            removeFile(oldData.imageUrl);
+                        }
+                    }
+                    catch { /* not JSON or parse error, skip */ }
+                }
+            }
+        }
         // Batch upsert using transaction
         await prisma.$transaction(Object.entries(input).map(([key, val]) => prisma.settings.upsert({
             where: { key_name: key },
@@ -107,6 +167,7 @@ export const updateSettings = async (req, res) => {
             update: { value: String(val) }
         })));
         await cacheInvalidateScope('settings');
+        await logAudit('update_settings', req.user?.username || 'system', `Updated ${Object.keys(input).length} setting keys`);
         res.json({ success: true });
     }
     catch (err) {

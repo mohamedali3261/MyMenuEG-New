@@ -1,11 +1,21 @@
 import nodemailer from 'nodemailer';
 import { logger } from '../utils/logger';
+import prisma from '../lib/prisma';
 // Email configuration
 const SMTP_HOST = process.env.SMTP_HOST;
 const SMTP_PORT = parseInt(process.env.SMTP_PORT || '587');
 const SMTP_USER = process.env.SMTP_USER;
 const SMTP_PASS = process.env.SMTP_PASS;
 const EMAIL_FROM = process.env.EMAIL_FROM || 'noreply@mymenueg.com';
+const getStoreName = async () => {
+    try {
+        const setting = await prisma.settings.findUnique({ where: { key_name: 'store_name' } });
+        return setting?.value || 'MyMenuEG';
+    }
+    catch {
+        return 'MyMenuEG';
+    }
+};
 // Check if email is configured
 const isEmailConfigured = SMTP_HOST && SMTP_USER && SMTP_PASS;
 // Create transporter
@@ -58,6 +68,7 @@ export const sendOrderConfirmationEmail = async (email, orderId, customerName, t
         </tr>
       `)
         .join('');
+    const storeName = await getStoreName();
     const html = `
     <!DOCTYPE html>
     <html>
@@ -78,7 +89,7 @@ export const sendOrderConfirmationEmail = async (email, orderId, customerName, t
     <body>
       <div class="container">
         <div class="header">
-          <h1>🛒 MyMenuEG</h1>
+          <h1>🛒 ${storeName}</h1>
           <p>Order Confirmation</p>
         </div>
         <div class="content">
@@ -106,7 +117,7 @@ export const sendOrderConfirmationEmail = async (email, orderId, customerName, t
           <p>Thank you for shopping with us!</p>
         </div>
         <div class="footer">
-          <p>© ${new Date().getFullYear()} MyMenuEG. All rights reserved.</p>
+          <p>© ${new Date().getFullYear()} ${storeName}. All rights reserved.</p>
         </div>
       </div>
     </body>
@@ -114,7 +125,7 @@ export const sendOrderConfirmationEmail = async (email, orderId, customerName, t
   `;
     return sendEmail({
         to: email,
-        subject: `Order Confirmation #${orderId} - MyMenuEG`,
+        subject: `Order Confirmation #${orderId} - ${storeName}`,
         html,
         text: `Order Confirmation #${orderId}\n\nDear ${customerName},\n\nThank you for your order! Total: ${total.toFixed(2)} EGP\n\nWe will contact you shortly.`
     });
@@ -142,6 +153,7 @@ export const sendOrderStatusEmail = async (email, orderId, customerName, status,
         }
     };
     const message = statusMessages[status] || { en: status, ar: statusAr };
+    const storeName = await getStoreName();
     const html = `
     <!DOCTYPE html>
     <html>
@@ -159,7 +171,7 @@ export const sendOrderStatusEmail = async (email, orderId, customerName, status,
     <body>
       <div class="container">
         <div class="header">
-          <h1>🛒 MyMenuEG</h1>
+          <h1>🛒 ${storeName}</h1>
           <p>Order Status Update</p>
         </div>
         <div class="content">
@@ -171,7 +183,7 @@ export const sendOrderStatusEmail = async (email, orderId, customerName, status,
           <p>Thank you for shopping with us!</p>
         </div>
         <div class="footer">
-          <p>© ${new Date().getFullYear()} MyMenuEG. All rights reserved.</p>
+          <p>© ${new Date().getFullYear()} ${storeName}. All rights reserved.</p>
         </div>
       </div>
     </body>
@@ -179,7 +191,7 @@ export const sendOrderStatusEmail = async (email, orderId, customerName, status,
   `;
     return sendEmail({
         to: email,
-        subject: `Order #${orderId} Status Update - ${status} - MyMenuEG`,
+        subject: `Order #${orderId} Status Update - ${status} - ${storeName}`,
         html,
         text: `Order #${orderId} Status: ${status}\n\n${message.en}`
     });

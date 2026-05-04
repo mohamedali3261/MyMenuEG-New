@@ -1,11 +1,17 @@
-import { useEffect } from 'react';
+import { useEffect, useState } from 'react';
 import { useStore } from '../../store/store';
 import MainSlider from './components/MainSlider';
 import BrandIdentitySection from './components/BrandIdentitySection';
+import BundleSlider from './components/BundleSlider';
 import HomeFeatures from './components/HomeFeatures';
-import HomeStats from './components/HomeStats';
 import CategorySection from './components/CategorySection';
+import DynamicPagesStrip from './components/DynamicPagesStrip';
+import FaqSection from './components/FaqSection';
+import GsapSlider from './components/GsapSlider';
+import MarqueeX from './components/MarqueeX';
+import SvgMarquee from './components/SvgMarquee';
 import { motion } from 'framer-motion';
+import { api } from '../../api';
 
 interface HomeCategory {
   id: string;
@@ -21,10 +27,15 @@ interface HomeProduct {
 
 export default function Home() {
   const { products, categories, isDataLoaded, rtl, branding } = useStore();
+  const [gsapSlides, setGsapSlides] = useState<any[]>([]);
 
   useEffect(() => {
     document.title = `${rtl ? 'الرئيسية' : 'Home'} | ${branding.storeName}`;
   }, [rtl, branding]);
+
+  useEffect(() => {
+    api.get('/gsap-slides').then(res => setGsapSlides(res.data || [])).catch(() => {});
+  }, []);
 
   if (!isDataLoaded) {
      return (
@@ -40,14 +51,21 @@ export default function Home() {
 
   return (
     <div className="w-full flex flex-col pb-24 overflow-hidden">
+      {gsapSlides.length > 0 && <GsapSlider slides={gsapSlides} />}
       <MainSlider />
-      
+      <MarqueeX />
+      <SvgMarquee />
+
       <BrandIdentitySection />
+
+      <BundleSlider />
+
+      <DynamicPagesStrip />
       
       {/* Dynamic Category Sections */}
       <div className="mt-12 space-y-10">
         {categories.map((cat: HomeCategory, idx: number) => {
-          const catProducts = products.filter((p: HomeProduct) => p.category_id === cat.id && p.status?.toLowerCase() === 'active');
+          const catProducts = products.filter((p: any) => p.category_id === cat.id && p.status?.toLowerCase() === 'active' && !(p.bundle_items && p.bundle_items.length > 0));
           if (catProducts.length === 0) return null;
           
           return (
@@ -68,7 +86,7 @@ export default function Home() {
       </div>
 
       <HomeFeatures />
-      <HomeStats />
+      <FaqSection />
     </div>
   );
 }

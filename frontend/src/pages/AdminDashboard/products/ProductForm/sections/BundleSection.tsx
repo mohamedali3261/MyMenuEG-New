@@ -51,7 +51,7 @@ export function BundleSection({
 
   const addBundleItem = (prod: any) => {
     if (bundleItems.find(i => i.product_id === prod.id)) return;
-    setBundleItems([...bundleItems, { product_id: prod.id, quantity: 1, product: prod }]);
+    setBundleItems([...bundleItems, { product_id: prod.id, quantity: 1, discount: 0, product: prod }]);
     setBundleSearch('');
     setBundleResults([]);
   };
@@ -62,6 +62,10 @@ export function BundleSection({
 
   const updateQuantity = (id: string, qty: number) => {
     setBundleItems(bundleItems.map(i => i.product_id === id ? { ...i, quantity: qty } : i));
+  };
+
+  const updateDiscount = (id: string, discount: number) => {
+    setBundleItems(bundleItems.map(i => i.product_id === id ? { ...i, discount } : i));
   };
 
   return (
@@ -130,15 +134,35 @@ export function BundleSection({
                 <div className="text-xs text-rose-500 font-black tracking-widest mt-1">EGP {item.product?.price || 0}</div>
               </div>
 
-              {/* Quantity Adjuster */}
-              <div className="flex items-center gap-2 bg-white dark:bg-black/20 border border-slate-200 dark:border-white/10 rounded-xl p-1">
-                <input 
-                  type="number"
-                  min="1"
-                  value={item.quantity}
-                  onChange={(e) => updateQuantity(item.product_id, parseInt(e.target.value) || 1)}
-                  className="w-12 text-center bg-transparent text-sm font-bold focus:outline-none"
-                />
+              <div className="flex items-center gap-2">
+                {/* Quantity Adjuster */}
+                <div className="flex flex-col items-center gap-1">
+                  <label className="text-[10px] uppercase font-black text-slate-500">{rtl ? 'الكمية' : 'Qty'}</label>
+                  <div className="flex items-center gap-2 bg-white dark:bg-black/20 border border-slate-200 dark:border-white/10 rounded-xl p-1">
+                    <input
+                      type="number"
+                      min="1"
+                      value={item.quantity}
+                      onChange={(e) => updateQuantity(item.product_id, parseInt(e.target.value) || 1)}
+                      className="w-12 text-center bg-transparent text-sm font-bold focus:outline-none"
+                    />
+                  </div>
+                </div>
+
+                {/* Discount Input */}
+                <div className="flex flex-col items-center gap-1">
+                  <label className="text-[10px] uppercase font-black text-slate-500">{rtl ? 'خصم' : 'Disc'}</label>
+                  <div className="flex items-center gap-2 bg-rose-500/10 dark:bg-rose-500/20 border border-rose-500/30 rounded-xl p-1">
+                    <input
+                      type="number"
+                      min="0"
+                      step="0.01"
+                      value={item.discount || 0}
+                      onChange={(e) => updateDiscount(item.product_id, parseFloat(e.target.value) || 0)}
+                      className="w-16 text-center bg-transparent text-sm font-bold text-rose-500 focus:outline-none"
+                    />
+                  </div>
+                </div>
               </div>
 
               <button

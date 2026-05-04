@@ -1,14 +1,18 @@
 import { Router } from 'express';
-import { createPayment, handleCallback, getPaymentStatus } from '../controllers/paymentController';
-import { authenticateToken } from '../middleware/auth';
+import { createPayment, handleCallback, handleFawryCallback, getPaymentStatus } from '../controllers/paymentController';
+import { authenticateToken, authenticateAny } from '../middleware/auth';
 
 const router = Router();
 
-// Public routes
+// Public callbacks (secured by Paymob/Fawry signatures internally)
 router.post('/callback', handleCallback);
-router.get('/status/:orderId', getPaymentStatus);
+router.post('/callback/fawry', handleFawryCallback);
 
-// Protected routes
-router.post('/create', authenticateToken, createPayment);
+// Secured routes
+router.get('/status/:orderId', authenticateAny, getPaymentStatus);
+router.post('/create', authenticateAny, createPayment);
+
+// Admin routes
+router.post('/create-admin', authenticateToken, createPayment);
 
 export default router;

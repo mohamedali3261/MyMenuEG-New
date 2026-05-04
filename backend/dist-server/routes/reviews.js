@@ -1,6 +1,7 @@
 import { Router } from 'express';
 import { getProductReviews, createReview, getAllReviews, updateReviewStatus, deleteReview } from '../controllers/reviewController';
-import { authenticateToken } from '../middleware/auth';
+import { authenticateToken, authenticateCustomer } from '../middleware/auth';
+import { hasPermission } from '../middleware/permissions';
 import { rateLimit } from 'express-rate-limit';
 const router = Router();
 // Rate limiter for review submissions
@@ -13,9 +14,9 @@ const reviewLimiter = rateLimit({
 });
 // Public routes
 router.get('/product', getProductReviews);
-router.post('/', reviewLimiter, createReview);
+router.post('/', reviewLimiter, authenticateCustomer, createReview);
 // Admin routes
-router.get('/', authenticateToken, getAllReviews);
-router.patch('/:id/status', authenticateToken, updateReviewStatus);
-router.delete('/:id', authenticateToken, deleteReview);
+router.get('/', authenticateToken, hasPermission('products:read'), getAllReviews);
+router.patch('/:id/status', authenticateToken, hasPermission('products:write'), updateReviewStatus);
+router.delete('/:id', authenticateToken, hasPermission('products:delete'), deleteReview);
 export default router;

@@ -12,6 +12,31 @@ const parsePermissions = (permissionsStr) => {
         return [];
     }
 };
+const LEGACY_PERMISSION_MAP = {
+    products: ['products:read', 'products:write', 'products:delete'],
+    categories: ['categories:read', 'categories:write', 'categories:delete'],
+    orders: ['orders:read', 'orders:write', 'orders:delete'],
+    coupons: ['coupons:read', 'coupons:write', 'coupons:delete'],
+    settings: ['settings:read', 'settings:write'],
+    admins: ['admins:read', 'admins:write', 'admins:delete'],
+    pages: ['pages:read', 'pages:write', 'pages:delete'],
+    slides: ['slides:read', 'slides:write', 'slides:delete'],
+    notifications: ['notifications:read', 'notifications:write'],
+    customers: ['customers:read', 'customers:write', 'customers:delete'],
+    database: ['database:backup', 'database:restore'],
+};
+const normalizePermissions = (permissions) => {
+    const normalized = new Set();
+    for (const permission of permissions) {
+        normalized.add(permission);
+        const legacyMapped = LEGACY_PERMISSION_MAP[permission];
+        if (legacyMapped) {
+            for (const mapped of legacyMapped)
+                normalized.add(mapped);
+        }
+    }
+    return normalized;
+};
 /**
  * Check if user has required permission
  */
@@ -24,8 +49,8 @@ export const hasPermission = (requiredPermission) => {
         if (req.user.is_super_admin) {
             return next();
         }
-        const userPermissions = req.user.permissions || [];
-        if (!userPermissions.includes(requiredPermission)) {
+        const userPermissions = normalizePermissions(req.user.permissions || []);
+        if (!userPermissions.has(requiredPermission)) {
             return res.status(403).json({
                 error: 'Permission denied',
                 required: requiredPermission
@@ -46,8 +71,8 @@ export const hasAnyPermission = (...permissions) => {
         if (req.user.is_super_admin) {
             return next();
         }
-        const userPermissions = req.user.permissions || [];
-        const hasAny = permissions.some(p => userPermissions.includes(p));
+        const userPermissions = normalizePermissions(req.user.permissions || []);
+        const hasAny = permissions.some(p => userPermissions.has(p));
         if (!hasAny) {
             return res.status(403).json({
                 error: 'Permission denied',
@@ -69,8 +94,8 @@ export const hasAllPermissions = (...permissions) => {
         if (req.user.is_super_admin) {
             return next();
         }
-        const userPermissions = req.user.permissions || [];
-        const hasAll = permissions.every(p => userPermissions.includes(p));
+        const userPermissions = normalizePermissions(req.user.permissions || []);
+        const hasAll = permissions.every(p => userPermissions.has(p));
         if (!hasAll) {
             return res.status(403).json({
                 error: 'Permission denied',

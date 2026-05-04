@@ -26,6 +26,7 @@ export const orderSchema = z.object({
   total_price: z.number().positive(),
   coupon_id: z.string().nullable().optional(),
   discount_amount: z.number().nonnegative().optional(),
+  payment_method: z.string().optional(),
 });
 
 // --- Product Validation ---
@@ -35,7 +36,7 @@ export const productSchema = z.object({
   name_en: z.string().min(2).max(255),
   description_ar: z.string().optional().default(''),
   description_en: z.string().optional().default(''),
-  price: z.coerce.number().positive(),
+  price: z.coerce.number().nonnegative(),
   old_price: z.coerce.number().nonnegative().optional().default(0),
   stock: z.coerce.number().int().nonnegative().optional().default(0),
   category_id: z.string().optional(),
@@ -52,7 +53,7 @@ export const productSchema = z.object({
   })).optional().default([]),
   quantity_prices: z.array(z.object({
     quantity_label: z.string().min(1),
-    price: z.coerce.number().positive(),
+    price: z.coerce.number().nonnegative(),
     old_price: z.coerce.number().nonnegative().optional().default(0),
   })).optional().default([]),
   shipping_info_ar: z.string().optional().default(''),
@@ -74,7 +75,7 @@ export const productSchema = z.object({
     label_ar: z.string().optional().default(''),
     label_en: z.string().optional().default(''),
     sku: z.string().optional().default(''),
-    price: z.coerce.number().positive(),
+    price: z.coerce.number().nonnegative(),
     old_price: z.coerce.number().nonnegative().optional().default(0),
     stock: z.coerce.number().int().nonnegative().optional().default(0),
     is_default: z.boolean().optional().default(false),
@@ -108,7 +109,8 @@ export const productSchema = z.object({
   fbt_ids: z.array(z.string()).optional().default([]),
   bundle_items: z.array(z.object({
     product_id: z.string().min(1),
-    quantity: z.coerce.number().int().positive().default(1)
+    quantity: z.coerce.number().int().positive().default(1),
+    discount: z.coerce.number().nonnegative().optional().default(0)
   })).optional().default([]),
 }).passthrough();
 

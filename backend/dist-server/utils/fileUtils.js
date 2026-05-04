@@ -3,8 +3,8 @@ import path from 'path';
 import { fileURLToPath } from 'url';
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
-// Root uploads directory: mymenueg/frontend/public/uploads
-const UPLOADS_ROOT = path.join(__dirname, '../../../../frontend/public/uploads');
+// Root uploads directory: mymenueg/uploads
+const UPLOADS_ROOT = path.join(__dirname, '../../../../uploads');
 /**
  * Removes a file given its relative URL (e.g., /uploads/products/cups/image.webp)
  */
@@ -15,7 +15,12 @@ export const removeFile = (relativeUrl) => {
     // Convert URL path to system path
     // Strip /uploads/ and join with UPLOADS_ROOT
     const relativePath = relativeUrl.replace(/^\/uploads\//, '');
-    const filePath = path.join(UPLOADS_ROOT, relativePath);
+    const filePath = path.resolve(UPLOADS_ROOT, relativePath);
+    // SECURITY: Prevent path traversal
+    if (!filePath.startsWith(path.resolve(UPLOADS_ROOT))) {
+        console.error(`Security alert: Attempted path traversal for file: ${filePath}`);
+        return;
+    }
     fs.promises
         .unlink(filePath)
         .then(() => {
@@ -31,7 +36,12 @@ export const removeFile = (relativeUrl) => {
  * Removes a directory and all its contents (used when deleting a category).
  */
 export const removeDirectory = async (relativePath) => {
-    const dirPath = path.join(UPLOADS_ROOT, relativePath);
+    const dirPath = path.resolve(UPLOADS_ROOT, relativePath);
+    // SECURITY: Prevent path traversal
+    if (!dirPath.startsWith(path.resolve(UPLOADS_ROOT))) {
+        console.error(`Security alert: Attempted path traversal for directory: ${dirPath}`);
+        return;
+    }
     try {
         await fs.promises.rm(dirPath, { recursive: true, force: true });
         console.log(`Successfully deleted directory: ${dirPath}`);

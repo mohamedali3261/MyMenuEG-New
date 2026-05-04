@@ -19,15 +19,44 @@ if (!fs.existsSync(LOG_DIR)) {
  */
 class Logger {
   private logFile = path.join(LOG_DIR, 'app.log');
+  private maxLogSize = 10 * 1024 * 1024; // 10MB
+
+  private async rotateLogs() {
+    try {
+      const stats = await fs.promises.stat(this.logFile);
+      if (stats.size > this.maxLogSize) {
+        const backupFile = path.join(LOG_DIR, `app.log.${Date.now()}.bak`);
+        await fs.promises.rename(this.logFile, backupFile);
+        
+        // Keep only last 5 backups
+        const files = await fs.promises.readdir(LOG_DIR);
+        const backups = files
+          .filter(f => f.startsWith('app.log.') && f.endsWith('.bak'))
+          .sort()
+          .reverse();
+        
+        if (backups.length > 5) {
+          for (const file of backups.slice(5)) {
+            await fs.promises.unlink(path.join(LOG_DIR, file));
+          }
+        }
+      }
+    } catch (err) {
+      // File might not exist yet, ignore
+    }
+  }
 
   private formatMessage(level: string, message: string) {
     const timestamp = new Date().toISOString();
     return `[${timestamp}] [${level.toUpperCase()}] ${message}\n`;
   }
 
-  private write(level: string, message: string) {
+  private async write(level: string, message: string) {
     const formatted = this.formatMessage(level, message);
     console.log(formatted.trim()); // Print to console
+    
+    await this.rotateLogs();
+    
     fs.promises.appendFile(this.logFile, formatted).catch((err) => {
       console.error('Failed to write log file:', err);
     });

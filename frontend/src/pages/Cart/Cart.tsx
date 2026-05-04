@@ -2,6 +2,7 @@ import { useEffect } from 'react';
 import { useStore } from '../../store/store';
 import { motion } from 'framer-motion';
 import CartItemComponent from './components/CartItem';
+import CartBundleItem from './components/CartBundleItem';
 import CartSummary from './components/CartSummary';
 import { ShoppingBag } from 'lucide-react';
 import { Link } from 'react-router-dom';
@@ -49,12 +50,16 @@ export default function Cart() {
           <div className="lg:col-span-2 space-y-4">
             {cart.map((item, index) => (
               <motion.div
-                key={item.id}
+                key={`${item.id}-${item.variant || ''}`}
                 initial={{ opacity: 0, x: -20 }}
                 animate={{ opacity: 1, x: 0 }}
                 transition={{ delay: index * 0.1 }}
               >
-                <CartItemComponent item={item} />
+                {item.is_bundle ? (
+                  <CartBundleItem item={item} />
+                ) : (
+                  <CartItemComponent item={item} />
+                )}
               </motion.div>
             ))}
           </div>
